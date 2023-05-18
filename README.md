@@ -1,36 +1,27 @@
-# Conduit Connector for <resource>
-[Conduit](https://conduit.io) for <resource>.
+# Conduit Connector for gRPC Server
+The gRPC Server connector is one of [Conduit](https://conduit.io) plugins. It provides a source gRPC Server connector.
+
+This connector should be paired with another Conduit instance or pipeline, that provides a
+[gRPC client destination](https://github.com/conduitio-labs/conduit-connector-grpc-client). Where the client will initiate
+the connection with this server, and start sending records to it.
 
 ## How to build?
 Run `make build` to build the connector.
 
 ## Testing
-Run `make test` to run all the unit tests. Run `make test-integration` to run the integration tests.
-
-The Docker compose file at `test/docker-compose.yml` can be used to run the required resource locally.
+Run `make test` to run all the unit tests.
 
 ## Source
-A source connector pulls data from an external resource and pushes it to downstream resources via Conduit.
+This source connector creates a server on the `url` provided as a parameter. When a client initiates connection, a
+bidirectional gRPC stream is created between the server and the client, the server keeps listening on this stream to
+receive records sent from the client, when a record is received, an acknowledgment is sent to the client on the same
+stream.
 
 ### Configuration
 
-| name                  | description                           | required | default value |
-|-----------------------|---------------------------------------|----------|---------------|
-| `source_config_param` | Description of `source_config_param`. | true     | 1000          |
-
-## Destination
-A destination connector pushes data from upstream resources to an external resource via Conduit.
-
-### Configuration
-
-| name                       | description                                | required | default value |
-|----------------------------|--------------------------------------------|----------|---------------|
-| `destination_config_param` | Description of `destination_config_param`. | true     | 1000          |
-
-## Known Issues & Limitations
-* Known issue A
-* Limitation A
+| name        | description                                                            | required | default value |
+|-------------|------------------------------------------------------------------------|----------|---------------|
+| `url`       | url to gRPC server.                                                    | true     |               |
 
 ## Planned work
-- [ ] Item A
-- [ ] Item B
+- Add a destination for gRPC server. 
