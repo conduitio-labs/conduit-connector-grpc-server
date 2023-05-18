@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpc
+//go:build tools
+
+package grpcserver
 
 import (
-	"context"
-	"testing"
+	_ "github.com/conduitio/conduit-connector-sdk/cmd/paramgen"
+	_ "github.com/golang/mock/mockgen"
 )
-
-func TestTeardown_NoOpen(t *testing.T) {
-	con := NewDestination()
-	err := con.Teardown(context.Background())
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-}

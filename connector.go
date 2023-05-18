@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpc
+package grpcserver
 
 import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -22,5 +22,5 @@ import (
 var Connector = sdk.Connector{
 	NewSpecification: Specification,
 	NewSource:        NewSource,
-	NewDestination:   NewDestination,
+	NewDestination:   nil,
 }

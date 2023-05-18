@@ -17,7 +17,7 @@ package main
 import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	grpc "github.com/conduitio-labs/conduit-connector-grpc"
+	grpc "github.com/conduitio-labs/conduit-connector-grpc-server"
 )
 
 func main() {
