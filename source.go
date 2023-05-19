@@ -19,7 +19,6 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 
@@ -73,7 +72,7 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 func (s *Source) Open(ctx context.Context, pos sdk.Position) error {
 	sdk.Logger(ctx).Info().Msg("Opening Source...")
 	s.server = source.NewServer(ctx)
-	err := s.runServer()
+	err := s.runServer(ctx)
 	if err != nil {
 		return err
 	}
@@ -109,7 +108,7 @@ func (s *Source) Teardown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Source) runServer() error {
+func (s *Source) runServer(ctx context.Context) error {
 	// listener can be set for test purposes
 	if s.listener == nil {
 		lis, err := net.Listen("tcp", s.config.URL)
@@ -125,7 +124,8 @@ func (s *Source) runServer() error {
 	go func() {
 		defer s.wg.Done()
 		if err := s.grpcSrv.Serve(s.listener); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+			sdk.Logger(ctx).Error().Msg("failed to serve")
+			return
 		}
 	}()
 	return nil
