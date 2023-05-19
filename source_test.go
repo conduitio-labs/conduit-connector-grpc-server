@@ -19,6 +19,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
@@ -99,6 +100,8 @@ func TestRead_Success(t *testing.T) {
 		is.NoErr(err)
 		is.Equal(got, rec)
 		err = src.Ack(ctx, rec.Position)
+		// wait for ack to be received
+		time.Sleep(500 * time.Millisecond)
 		is.NoErr(err)
 	}
 }
