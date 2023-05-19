@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcserver
+package source
 
 import (
 	"context"
@@ -28,9 +28,8 @@ import (
 type Server struct {
 	pb.UnimplementedStreamServiceServer
 
-	recordCh    chan sdk.Record
-	ackCh       chan sdk.Position
-	ackSent     chan bool
+	RecordCh    chan sdk.Record
+	Teardown    chan bool
 	streamMutex sync.Mutex
 	openContext context.Context
 	tomb        *tomb.Tomb
@@ -39,9 +38,9 @@ type Server struct {
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		recordCh:    make(chan sdk.Record),
-		ackCh:       make(chan sdk.Position),
-		ackSent:     make(chan bool),
+		RecordCh: make(chan sdk.Record),
+		// buffering channel, so Teardown won't be blocked until the signal is received
+		Teardown:    make(chan bool, 1),
 		openContext: ctx,
 		tomb:        &tomb.Tomb{},
 	}
@@ -57,39 +56,35 @@ func (s *Server) Stream(stream pb.StreamService_StreamServer) error {
 	s.streamMutex.Unlock()
 
 	// spawn a go routine to receive records from client
-	s.tomb.Go(s.RecvRecords)
-	// spawn a go routine to send acks to the client
-	s.tomb.Go(s.sendAcks)
+	s.tomb.Go(s.recvRecords)
 
-	for {
-		select {
-		case <-s.openContext.Done():
-			s.tomb.Kill(fmt.Errorf("open context was cancelled"))
-			return s.tomb.Err()
-		case <-stream.Context().Done():
-			s.tomb.Kill(fmt.Errorf("stream context was cancelled"))
-			return s.tomb.Err()
-		case <-s.tomb.Dead():
-			return s.tomb.Err()
-		}
+	select {
+	case <-s.openContext.Done():
+		s.tomb.Kill(fmt.Errorf("open context was cancelled"))
+		// wait for Teardown to send a signal that it's called
+		<-s.Teardown
+	case <-stream.Context().Done():
+		s.tomb.Kill(fmt.Errorf("stream context was cancelled"))
+	case <-s.tomb.Dying():
+		// wait for tomb to die
 	}
+	return s.tomb.Wait()
 }
 
-func (s *Server) RecvRecords() error {
-	defer close(s.recordCh)
+func (s *Server) recvRecords() error {
+	defer close(s.RecordCh)
 	for {
 		record, err := s.stream.Recv()
 		if err != nil {
 			return fmt.Errorf("error receiving record from client: %w", err)
 		}
-
 		sdkRecord, err := fromproto.Record(record)
 		if err != nil {
 			return err
 		}
 		// make sure the record channel is not closed
 		select {
-		case s.recordCh <- sdkRecord:
+		case s.RecordCh <- sdkRecord:
 			// worked fine!
 		case <-s.tomb.Dying():
 			return s.tomb.Err()
@@ -97,24 +92,10 @@ func (s *Server) RecvRecords() error {
 	}
 }
 
-func (s *Server) sendAcks() error {
-	defer close(s.ackCh)
-	defer close(s.ackSent)
-	for {
-		select {
-		case <-s.tomb.Dying():
-			return s.tomb.Err()
-		case ack, ok := <-s.ackCh:
-			if !ok {
-				s.ackSent <- false
-				return fmt.Errorf("ack channel is closed")
-			}
-			err := s.stream.Send(&pb.Ack{AckPosition: ack})
-			if err != nil {
-				s.ackSent <- false
-				return fmt.Errorf("error sending ack to stream: %w", err)
-			}
-			s.ackSent <- true
-		}
+func (s *Server) SendAck(position sdk.Position) error {
+	err := s.stream.Send(&pb.Ack{AckPosition: position})
+	if err != nil {
+		return fmt.Errorf("error while sending ack into stream: %w", err)
 	}
+	return nil
 }

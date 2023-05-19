@@ -30,11 +30,10 @@ import (
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
+	is := is.New(t)
 	con := NewSource()
 	err := con.Teardown(context.Background())
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
+	is.NoErr(err)
 }
 
 func TestRead_Success(t *testing.T) {

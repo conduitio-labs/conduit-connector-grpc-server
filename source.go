@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
+	"github.com/conduitio-labs/conduit-connector-grpc-server/source"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"google.golang.org/grpc"
 )
@@ -31,13 +32,15 @@ import (
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   SourceConfig
-	server   *Server
-	listener net.Listener
+	config SourceConfig
+	server *source.Server
 
 	// for stopping the server
 	grpcSrv *grpc.Server
 	wg      sync.WaitGroup
+
+	// used only for injecting a listener in tests
+	listener net.Listener
 }
 
 type SourceConfig struct {
@@ -69,7 +72,7 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 
 func (s *Source) Open(ctx context.Context, pos sdk.Position) error {
 	sdk.Logger(ctx).Info().Msg("Opening Source...")
-	s.server = NewServer(ctx)
+	s.server = source.NewServer(ctx)
 	err := s.runServer()
 	if err != nil {
 		return err
@@ -81,7 +84,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 	select {
 	case <-ctx.Done():
 		return sdk.Record{}, ctx.Err()
-	case record, ok := <-s.server.recordCh:
+	case record, ok := <-s.server.RecordCh:
 		if !ok {
 			return sdk.Record{}, fmt.Errorf("record channel is closed")
 		}
@@ -90,22 +93,15 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 }
 
 func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
-	select {
-	case s.server.ackCh <- position:
-		// worked fine!
-	default:
-		return fmt.Errorf("ack channel is closed")
-	}
-	// wait until ack is sent into the stream
-	sent := <-s.server.ackSent
-	if !sent {
-		return fmt.Errorf("failed to send acknowledgment %q to client", position)
-	}
-
-	return nil
+	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
+	return s.server.SendAck(position)
 }
 
 func (s *Source) Teardown(ctx context.Context) error {
+	if s.server != nil {
+		// server might be waiting for this signal, if pipeline was stopped.
+		s.server.Teardown <- true
+	}
 	if s.grpcSrv != nil {
 		s.grpcSrv.Stop()
 		s.wg.Wait()
@@ -114,7 +110,7 @@ func (s *Source) Teardown(ctx context.Context) error {
 }
 
 func (s *Source) runServer() error {
-	// s.listener can be set for test purposes
+	// listener can be set for test purposes
 	if s.listener == nil {
 		lis, err := net.Listen("tcp", s.config.URL)
 		if err != nil {
