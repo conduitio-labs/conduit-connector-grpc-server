@@ -20,48 +20,48 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	StreamService_Stream_FullMethodName = "/protov1.StreamService/Stream"
+	SourceService_Stream_FullMethodName = "/protov1.SourceService/Stream"
 )
 
-// StreamServiceClient is the client API for StreamService service.
+// SourceServiceClient is the client API for SourceService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type StreamServiceClient interface {
-	Stream(ctx context.Context, opts ...grpc.CallOption) (StreamService_StreamClient, error)
+type SourceServiceClient interface {
+	Stream(ctx context.Context, opts ...grpc.CallOption) (SourceService_StreamClient, error)
 }
 
-type streamServiceClient struct {
+type sourceServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewStreamServiceClient(cc grpc.ClientConnInterface) StreamServiceClient {
-	return &streamServiceClient{cc}
+func NewSourceServiceClient(cc grpc.ClientConnInterface) SourceServiceClient {
+	return &sourceServiceClient{cc}
 }
 
-func (c *streamServiceClient) Stream(ctx context.Context, opts ...grpc.CallOption) (StreamService_StreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &StreamService_ServiceDesc.Streams[0], StreamService_Stream_FullMethodName, opts...)
+func (c *sourceServiceClient) Stream(ctx context.Context, opts ...grpc.CallOption) (SourceService_StreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SourceService_ServiceDesc.Streams[0], SourceService_Stream_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &streamServiceStreamClient{stream}
+	x := &sourceServiceStreamClient{stream}
 	return x, nil
 }
 
-type StreamService_StreamClient interface {
+type SourceService_StreamClient interface {
 	Send(*v1.Record) error
 	Recv() (*Ack, error)
 	grpc.ClientStream
 }
 
-type streamServiceStreamClient struct {
+type sourceServiceStreamClient struct {
 	grpc.ClientStream
 }
 
-func (x *streamServiceStreamClient) Send(m *v1.Record) error {
+func (x *sourceServiceStreamClient) Send(m *v1.Record) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *streamServiceStreamClient) Recv() (*Ack, error) {
+func (x *sourceServiceStreamClient) Recv() (*Ack, error) {
 	m := new(Ack)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -69,53 +69,53 @@ func (x *streamServiceStreamClient) Recv() (*Ack, error) {
 	return m, nil
 }
 
-// StreamServiceServer is the server API for StreamService service.
-// All implementations must embed UnimplementedStreamServiceServer
+// SourceServiceServer is the server API for SourceService service.
+// All implementations must embed UnimplementedSourceServiceServer
 // for forward compatibility
-type StreamServiceServer interface {
-	Stream(StreamService_StreamServer) error
-	mustEmbedUnimplementedStreamServiceServer()
+type SourceServiceServer interface {
+	Stream(SourceService_StreamServer) error
+	mustEmbedUnimplementedSourceServiceServer()
 }
 
-// UnimplementedStreamServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedStreamServiceServer struct {
+// UnimplementedSourceServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedSourceServiceServer struct {
 }
 
-func (UnimplementedStreamServiceServer) Stream(StreamService_StreamServer) error {
+func (UnimplementedSourceServiceServer) Stream(SourceService_StreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
 }
-func (UnimplementedStreamServiceServer) mustEmbedUnimplementedStreamServiceServer() {}
+func (UnimplementedSourceServiceServer) mustEmbedUnimplementedSourceServiceServer() {}
 
-// UnsafeStreamServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to StreamServiceServer will
+// UnsafeSourceServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SourceServiceServer will
 // result in compilation errors.
-type UnsafeStreamServiceServer interface {
-	mustEmbedUnimplementedStreamServiceServer()
+type UnsafeSourceServiceServer interface {
+	mustEmbedUnimplementedSourceServiceServer()
 }
 
-func RegisterStreamServiceServer(s grpc.ServiceRegistrar, srv StreamServiceServer) {
-	s.RegisterService(&StreamService_ServiceDesc, srv)
+func RegisterSourceServiceServer(s grpc.ServiceRegistrar, srv SourceServiceServer) {
+	s.RegisterService(&SourceService_ServiceDesc, srv)
 }
 
-func _StreamService_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(StreamServiceServer).Stream(&streamServiceStreamServer{stream})
+func _SourceService_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(SourceServiceServer).Stream(&sourceServiceStreamServer{stream})
 }
 
-type StreamService_StreamServer interface {
+type SourceService_StreamServer interface {
 	Send(*Ack) error
 	Recv() (*v1.Record, error)
 	grpc.ServerStream
 }
 
-type streamServiceStreamServer struct {
+type sourceServiceStreamServer struct {
 	grpc.ServerStream
 }
 
-func (x *streamServiceStreamServer) Send(m *Ack) error {
+func (x *sourceServiceStreamServer) Send(m *Ack) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *streamServiceStreamServer) Recv() (*v1.Record, error) {
+func (x *sourceServiceStreamServer) Recv() (*v1.Record, error) {
 	m := new(v1.Record)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -123,17 +123,17 @@ func (x *streamServiceStreamServer) Recv() (*v1.Record, error) {
 	return m, nil
 }
 
-// StreamService_ServiceDesc is the grpc.ServiceDesc for StreamService service.
+// SourceService_ServiceDesc is the grpc.ServiceDesc for SourceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var StreamService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "protov1.StreamService",
-	HandlerType: (*StreamServiceServer)(nil),
+var SourceService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "protov1.SourceService",
+	HandlerType: (*SourceServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Stream",
-			Handler:       _StreamService_Stream_Handler,
+			Handler:       _SourceService_Stream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

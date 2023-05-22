@@ -26,14 +26,14 @@ import (
 )
 
 type Server struct {
-	pb.UnimplementedStreamServiceServer
+	pb.UnimplementedSourceServiceServer
 
 	RecordCh    chan sdk.Record
 	Teardown    chan bool
 	streamMutex sync.Mutex
 	openContext context.Context
 	tomb        *tomb.Tomb
-	stream      pb.StreamService_StreamServer
+	stream      pb.SourceService_StreamServer
 }
 
 func NewServer(ctx context.Context) *Server {
@@ -46,7 +46,7 @@ func NewServer(ctx context.Context) *Server {
 	}
 }
 
-func (s *Server) Stream(stream pb.StreamService_StreamServer) error {
+func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	s.streamMutex.Lock()
 	if s.stream != nil {
 		s.streamMutex.Unlock()

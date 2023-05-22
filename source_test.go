@@ -106,7 +106,7 @@ func TestRead_Success(t *testing.T) {
 	}
 }
 
-func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.StreamService_StreamClient {
+func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
 	is := is.New(t)
 	ctx := context.Background()
 	conn, err := grpc.DialContext(
@@ -122,13 +122,13 @@ func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (
 	t.Cleanup(func() {
 		conn.Close()
 	})
-	client := pb.NewStreamServiceClient(conn)
+	client := pb.NewSourceServiceClient(conn)
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
 	return stream
 }
 
-func sendExpectedRecords(t *testing.T, stream pb.StreamService_StreamClient, records []sdk.Record) error {
+func sendExpectedRecords(t *testing.T, stream pb.SourceService_StreamClient, records []sdk.Record) error {
 	is := is.New(t)
 	for _, r := range records {
 		record, err := toproto.Record(r)

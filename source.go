@@ -118,7 +118,7 @@ func (s *Source) runServer(ctx context.Context) error {
 		s.listener = lis
 	}
 	s.grpcSrv = grpc.NewServer()
-	pb.RegisterStreamServiceServer(s.grpcSrv, s.server)
+	pb.RegisterSourceServiceServer(s.grpcSrv, s.server)
 
 	s.wg.Add(1)
 	go func() {
