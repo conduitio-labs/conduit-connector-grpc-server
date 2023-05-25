@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/source"
@@ -36,7 +35,7 @@ type Source struct {
 
 	// for stopping the server
 	grpcSrv *grpc.Server
-	wg      sync.WaitGroup
+	errCh   chan error
 
 	// used only for injecting a listener in tests
 	listener net.Listener
@@ -102,7 +101,14 @@ func (s *Source) Teardown(ctx context.Context) error {
 	}
 	if s.grpcSrv != nil {
 		s.grpcSrv.Stop()
-		s.wg.Wait()
+		// check if an error happened while stopping server
+		err, ok := <-s.errCh
+		if err != nil {
+			return err
+		}
+		if ok {
+			close(s.errCh)
+		}
 	}
 	return nil
 }
@@ -119,13 +125,13 @@ func (s *Source) runServer(ctx context.Context) error {
 	s.grpcSrv = grpc.NewServer()
 	pb.RegisterSourceServiceServer(s.grpcSrv, s.server)
 
-	s.wg.Add(1)
+	s.errCh = make(chan error)
 	go func() {
-		defer s.wg.Done()
 		if err := s.grpcSrv.Serve(s.listener); err != nil {
-			sdk.Logger(ctx).Error().Msg("failed to serve")
+			s.errCh <- fmt.Errorf("failed to serve")
 			return
 		}
+		close(s.errCh)
 	}()
 	return nil
 }
