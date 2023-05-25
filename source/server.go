@@ -70,11 +70,13 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		// wait for tomb to die
 		err = t.Wait()
 	}
+	if err != nil {
+		sdk.Logger(s.openContext).Warn().Msg(err.Error())
+	}
 	return err
 }
 
 func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer) error {
-	defer close(s.RecordCh)
 	for {
 		record, err := stream.Recv()
 		if err == io.EOF && s.openContext.Err() != nil {
@@ -112,4 +114,5 @@ func (s *Server) SendAck(position sdk.Position) error {
 
 func (s *Server) Close() {
 	close(s.teardown)
+	close(s.RecordCh)
 }
