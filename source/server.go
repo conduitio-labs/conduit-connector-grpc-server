@@ -17,7 +17,8 @@ package source
 import (
 	"context"
 	"fmt"
-	"sync"
+	"io"
+	"sync/atomic"
 
 	"github.com/conduitio-labs/conduit-connector-grpc-server/fromproto"
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
@@ -29,52 +30,57 @@ type Server struct {
 	pb.UnimplementedSourceServiceServer
 
 	RecordCh    chan sdk.Record
-	Teardown    chan bool
-	streamMutex sync.Mutex
+	teardown    chan struct{}
 	openContext context.Context
-	tomb        *tomb.Tomb
-	stream      pb.SourceService_StreamServer
+
+	stream atomic.Pointer[pb.SourceService_StreamServer]
 }
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		RecordCh: make(chan sdk.Record),
-		// buffering channel, so Teardown won't be blocked until the signal is received
-		Teardown:    make(chan bool, 1),
+		RecordCh:    make(chan sdk.Record),
+		teardown:    make(chan struct{}),
 		openContext: ctx,
-		tomb:        &tomb.Tomb{},
 	}
 }
 
 func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
-	s.streamMutex.Lock()
-	if s.stream != nil {
-		s.streamMutex.Unlock()
+	if !s.stream.CompareAndSwap(nil, &stream) {
 		return fmt.Errorf("only one client connection is supported")
 	}
-	s.stream = stream
-	s.streamMutex.Unlock()
+	defer func() {
+		s.stream.Store(nil)
+	}()
+
+	t := &tomb.Tomb{}
 
 	// spawn a go routine to receive records from client
-	s.tomb.Go(s.recvRecords)
+	t.Go(func() error { return s.recvRecords(t, stream) })
 
+	var err error
 	select {
 	case <-s.openContext.Done():
-		s.tomb.Kill(fmt.Errorf("open context was cancelled"))
-		// wait for Teardown to send a signal that it's called
-		<-s.Teardown
-	case <-stream.Context().Done():
-		s.tomb.Kill(fmt.Errorf("stream context was cancelled"))
-	case <-s.tomb.Dying():
+		t.Kill(nil)
+		// block until teardown is called and this channel is closed
+		<-s.teardown
+		if !t.Alive() {
+			err = t.Err()
+		}
+	case <-t.Dying():
 		// wait for tomb to die
+		err = t.Wait()
 	}
-	return s.tomb.Wait()
+	return err
 }
 
-func (s *Server) recvRecords() error {
+func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer) error {
 	defer close(s.RecordCh)
 	for {
-		record, err := s.stream.Recv()
+		record, err := stream.Recv()
+		if err == io.EOF && s.openContext.Err() != nil {
+			// stop signal was received
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("error receiving record from client: %w", err)
 		}
@@ -85,17 +91,25 @@ func (s *Server) recvRecords() error {
 		// make sure the record channel is not closed
 		select {
 		case s.RecordCh <- sdkRecord:
-			// worked fine!
-		case <-s.tomb.Dying():
-			return s.tomb.Err()
+		// worked fine!
+		case <-t.Dying():
+			return t.Err()
 		}
 	}
 }
 
 func (s *Server) SendAck(position sdk.Position) error {
-	err := s.stream.Send(&pb.Ack{AckPosition: position})
+	stream := s.stream.Load()
+	if stream == nil {
+		return fmt.Errorf("no stream is open")
+	}
+	err := (*stream).Send(&pb.Ack{AckPosition: position})
 	if err != nil {
 		return fmt.Errorf("error while sending ack into stream: %w", err)
 	}
 	return nil
+}
+
+func (s *Server) Close() {
+	close(s.teardown)
 }

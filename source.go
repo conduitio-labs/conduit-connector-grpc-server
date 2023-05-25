@@ -98,8 +98,7 @@ func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
 
 func (s *Source) Teardown(ctx context.Context) error {
 	if s.server != nil {
-		// server might be waiting for this signal, if pipeline was stopped.
-		s.server.Teardown <- true
+		s.server.Close()
 	}
 	if s.grpcSrv != nil {
 		s.grpcSrv.Stop()
