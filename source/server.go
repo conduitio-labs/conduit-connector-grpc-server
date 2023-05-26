@@ -34,6 +34,7 @@ type Server struct {
 	openContext context.Context
 
 	stream atomic.Pointer[pb.SourceService_StreamServer]
+	tomb   atomic.Pointer[*tomb.Tomb]
 }
 
 func NewServer(ctx context.Context) *Server {
@@ -49,11 +50,11 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
 		return fmt.Errorf("only one client connection is supported")
 	}
+	t := &tomb.Tomb{}
+	s.tomb.Store(&t)
 	defer func() {
 		s.stream.Store(nil)
 	}()
-
-	t := &tomb.Tomb{}
 
 	// spawn a go routine to receive records from client
 	t.Go(func() error { return s.recvRecords(t, stream) })
@@ -67,6 +68,8 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		if !t.Alive() {
 			err = t.Err()
 		}
+	case <-s.teardown:
+		t.Kill(nil)
 	case <-t.Dying():
 		// wait for tomb to die
 		err = t.Wait()
@@ -115,5 +118,9 @@ func (s *Server) SendAck(position sdk.Position) error {
 
 func (s *Server) Close() {
 	close(s.teardown)
+	t := s.tomb.Load()
+	if t != nil {
+		_ = (*t).Wait()
+	}
 	close(s.RecordCh)
 }
