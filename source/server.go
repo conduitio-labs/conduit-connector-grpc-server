@@ -32,7 +32,6 @@ type Server struct {
 	RecordCh    chan sdk.Record
 	teardown    chan struct{}
 	openContext context.Context
-	t           *tomb.Tomb
 
 	stream atomic.Pointer[pb.SourceService_StreamServer]
 }
