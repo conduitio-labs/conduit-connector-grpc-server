@@ -32,6 +32,7 @@ type Server struct {
 	RecordCh    chan sdk.Record
 	teardown    chan struct{}
 	openContext context.Context
+	t           *tomb.Tomb
 
 	stream atomic.Pointer[pb.SourceService_StreamServer]
 }
@@ -46,29 +47,30 @@ func NewServer(ctx context.Context) *Server {
 
 func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	if !s.stream.CompareAndSwap(nil, &stream) {
+		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
 		return fmt.Errorf("only one client connection is supported")
 	}
 	defer func() {
 		s.stream.Store(nil)
 	}()
 
-	t := &tomb.Tomb{}
+	s.t = &tomb.Tomb{}
 
 	// spawn a go routine to receive records from client
-	t.Go(func() error { return s.recvRecords(t, stream) })
+	s.t.Go(func() error { return s.recvRecords(stream) })
 
 	var err error
 	select {
 	case <-s.openContext.Done():
-		t.Kill(nil)
+		s.t.Kill(nil)
 		// block until teardown is called and this channel is closed
 		<-s.teardown
-		if !t.Alive() {
-			err = t.Err()
+		if !s.t.Alive() {
+			err = s.t.Err()
 		}
-	case <-t.Dying():
+	case <-s.t.Dying():
 		// wait for tomb to die
-		err = t.Wait()
+		err = s.t.Wait()
 	}
 	if err != nil {
 		sdk.Logger(s.openContext).Warn().Msg(err.Error())
@@ -76,7 +78,7 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	return err
 }
 
-func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer) error {
+func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 	for {
 		record, err := stream.Recv()
 		if err == io.EOF && s.openContext.Err() != nil {
@@ -94,8 +96,8 @@ func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer)
 		select {
 		case s.RecordCh <- sdkRecord:
 		// worked fine!
-		case <-t.Dying():
-			return t.Err()
+		case <-s.t.Dying():
+			return s.t.Err()
 		}
 	}
 }
@@ -113,6 +115,9 @@ func (s *Server) SendAck(position sdk.Position) error {
 }
 
 func (s *Server) Close() {
+	if s.t.Alive() {
+		s.t.Kill(nil)
+	}
 	close(s.teardown)
 	close(s.RecordCh)
 }

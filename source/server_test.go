@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcserver
+package source
 
 import (
 	"bytes"
@@ -30,20 +30,17 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-func TestTeardownSource_NoOpen(t *testing.T) {
-	is := is.New(t)
-	con := NewSource()
-	err := con.Teardown(context.Background())
-	is.NoErr(err)
-}
-
-func TestRead_Success(t *testing.T) {
+func TestServer_Success(t *testing.T) {
 	is := is.New(t)
 	// use in-memory connection
 	lis := bufconn.Listen(1024 * 1024)
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
 		return lis.DialContext(ctx)
 	}
+	ctx := context.Background()
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	defer server.Close()
 
 	records := []sdk.Record{
 		{
@@ -76,19 +73,8 @@ func TestRead_Success(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	src := NewSourceWithListener(lis)
-	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
-	is.NoErr(err)
-	err = src.Open(ctx, nil)
-	is.NoErr(err)
-	defer func(src sdk.Source, ctx context.Context) {
-		err := src.Teardown(ctx)
-		is.NoErr(err)
-	}(src, ctx)
-
 	// prepare client
-	stream := createTestClient(t, dialer)
+	stream := createTestClient(t, "bufnet1", dialer)
 	go func() {
 		err := sendExpectedRecords(t, stream, records)
 		is.NoErr(err)
@@ -96,34 +82,94 @@ func TestRead_Success(t *testing.T) {
 
 	// read and assert records, send acks
 	for _, rec := range records {
-		got, err := src.Read(ctx)
-		is.NoErr(err)
+		got, ok := <-server.RecordCh
+		is.True(ok)
 		is.Equal(got, rec)
-		err = src.Ack(ctx, rec.Position)
+		err = server.SendAck(rec.Position)
 		is.NoErr(err)
 	}
-	// wait for ack to be received
+	// wait for acks to be received
 	time.Sleep(500 * time.Millisecond)
 }
 
-func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
+func TestServer_ClientStreamClosed(t *testing.T) {
+	is := is.New(t)
+	// use in-memory connection
+	lis := bufconn.Listen(1024 * 1024)
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
+		return lis.DialContext(ctx)
+	}
+	ctx := context.Background()
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		server.Close()
+	})
+
+	records := []sdk.Record{
+		{
+			Position:  sdk.Position("foo"),
+			Operation: sdk.OperationCreate,
+			Key:       sdk.StructuredData{"id1": "6"},
+			Payload: sdk.Change{
+				After: sdk.StructuredData{
+					"foo": "bar",
+				},
+			},
+		},
+	}
+
+	// create first client
+	stream1 := createTestClient(t, "bufnet4", dialer)
+	// first client closed the stream with server
+	err = stream1.CloseSend()
+	is.NoErr(err)
+	time.Sleep(1 * time.Second)
+
+	// second client should be able to connect to server
+	stream2 := createTestClient(t, "bufnet5", dialer)
+
+	record, err := toproto.Record(records[0])
+	is.NoErr(err)
+	// second stream should work
+	err = stream2.Send(record)
+	is.NoErr(err)
+}
+
+func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Server, error) {
+	server := NewServer(ctx)
+	grpcSrv := grpc.NewServer()
+	pb.RegisterSourceServiceServer(grpcSrv, server)
+	go func() {
+		if err := grpcSrv.Serve(lis); err != nil {
+			return
+		}
+	}()
+	t.Cleanup(func() {
+		grpcSrv.Stop()
+	})
+
+	return server, nil
+}
+
+func createTestClient(t *testing.T, target string, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
 	is := is.New(t)
 	ctx := context.Background()
 	conn, err := grpc.DialContext(
 		ctx,
-		"bufnet",
+		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithContextDialer(dialer),
 	)
 	is.NoErr(err)
-	t.Cleanup(func() {
-		err = conn.Close()
-		is.NoErr(err)
-	})
 	client := pb.NewSourceServiceClient(conn)
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
+	t.Cleanup(func() {
+		err := conn.Close()
+		is.NoErr(err)
+	})
 	return stream
 }
 
