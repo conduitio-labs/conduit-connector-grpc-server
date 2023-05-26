@@ -54,23 +54,23 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		s.stream.Store(nil)
 	}()
 
-	s.t = &tomb.Tomb{}
+	t := &tomb.Tomb{}
 
 	// spawn a go routine to receive records from client
-	s.t.Go(func() error { return s.recvRecords(stream) })
+	t.Go(func() error { return s.recvRecords(t, stream) })
 
 	var err error
 	select {
 	case <-s.openContext.Done():
-		s.t.Kill(nil)
+		t.Kill(nil)
 		// block until teardown is called and this channel is closed
 		<-s.teardown
-		if !s.t.Alive() {
-			err = s.t.Err()
+		if !t.Alive() {
+			err = t.Err()
 		}
-	case <-s.t.Dying():
+	case <-t.Dying():
 		// wait for tomb to die
-		err = s.t.Wait()
+		err = t.Wait()
 	}
 	if err != nil {
 		sdk.Logger(s.openContext).Warn().Msg(err.Error())
@@ -78,7 +78,7 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	return err
 }
 
-func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
+func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer) error {
 	for {
 		record, err := stream.Recv()
 		if err == io.EOF && s.openContext.Err() != nil {
@@ -96,8 +96,8 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 		select {
 		case s.RecordCh <- sdkRecord:
 		// worked fine!
-		case <-s.t.Dying():
-			return s.t.Err()
+		case <-t.Dying():
+			return t.Err()
 		}
 	}
 }
@@ -115,9 +115,6 @@ func (s *Server) SendAck(position sdk.Position) error {
 }
 
 func (s *Server) Close() {
-	if s.t.Alive() {
-		s.t.Kill(nil)
-	}
 	close(s.teardown)
 	close(s.RecordCh)
 }

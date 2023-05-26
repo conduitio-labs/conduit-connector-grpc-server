@@ -74,7 +74,7 @@ func TestServer_Success(t *testing.T) {
 	}
 
 	// prepare client
-	stream := createTestClient(t, "bufnet1", dialer)
+	stream := createTestClient(t, dialer)
 	go func() {
 		err := sendExpectedRecords(t, stream, records)
 		is.NoErr(err)
@@ -102,9 +102,7 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	ctx := context.Background()
 	server, err := runServer(t, lis, ctx)
 	is.NoErr(err)
-	t.Cleanup(func() {
-		server.Close()
-	})
+	defer server.Close()
 
 	records := []sdk.Record{
 		{
@@ -120,14 +118,14 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	}
 
 	// create first client
-	stream1 := createTestClient(t, "bufnet4", dialer)
+	stream1 := createTestClient(t, dialer)
 	// first client closed the stream with server
 	err = stream1.CloseSend()
 	is.NoErr(err)
 	time.Sleep(1 * time.Second)
 
 	// second client should be able to connect to server
-	stream2 := createTestClient(t, "bufnet5", dialer)
+	stream2 := createTestClient(t, dialer)
 
 	record, err := toproto.Record(records[0])
 	is.NoErr(err)
@@ -152,12 +150,12 @@ func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Serve
 	return server, nil
 }
 
-func createTestClient(t *testing.T, target string, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
+func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
 	is := is.New(t)
 	ctx := context.Background()
 	conn, err := grpc.DialContext(
 		ctx,
-		target,
+		"bufnet",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithContextDialer(dialer),
