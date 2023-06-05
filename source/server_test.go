@@ -76,8 +76,12 @@ func TestServer_Success(t *testing.T) {
 	// prepare client
 	stream := createTestClient(t, dialer)
 	go func() {
-		err := sendExpectedRecords(t, stream, records)
-		is.NoErr(err)
+		for _, r := range records {
+			record, err := toproto.Record(r)
+			is.NoErr(err)
+			err = stream.Send(record)
+			is.NoErr(err)
+		}
 	}()
 
 	// read and assert records, send acks
@@ -88,8 +92,58 @@ func TestServer_Success(t *testing.T) {
 		err = server.SendAck(rec.Position)
 		is.NoErr(err)
 	}
+
 	// wait for acks to be received
-	time.Sleep(500 * time.Millisecond)
+	for i := range records {
+		// block until ack is received
+		ack, err := stream.Recv()
+		is.NoErr(err)
+		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
+	}
+}
+
+func TestServer_StopSignal(t *testing.T) {
+	is := is.New(t)
+	// use in-memory connection
+	lis := bufconn.Listen(1024 * 1024)
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
+		return lis.DialContext(ctx)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	defer server.Close()
+
+	// prepare client
+	stream := createTestClient(t, dialer)
+
+	want := sdk.Record{Position: sdk.Position("foo")}
+	record, err := toproto.Record(want)
+	is.NoErr(err)
+	err = stream.Send(record)
+	is.NoErr(err)
+
+	// read and assert records, send acks
+	select {
+	case got := <-server.RecordCh:
+		is.Equal(got, want)
+	case <-time.After(time.Second):
+		is.Fail() // record not received in time
+	}
+
+	// cancel the open context, which signals a stop
+	cancel()
+
+	tomb := server.tomb.Load()
+	select {
+	case <-(*tomb).Dying():
+		// this is expected
+	case <-time.After(time.Second):
+		is.Fail() // tomb didn't start dying
+	}
+
+	err = server.SendAck(want.Position)
+	is.NoErr(err)
 }
 
 func TestServer_ClientStreamClosed(t *testing.T) {
@@ -104,15 +158,13 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	is.NoErr(err)
 	defer server.Close()
 
-	records := []sdk.Record{
-		{
-			Position:  sdk.Position("foo"),
-			Operation: sdk.OperationCreate,
-			Key:       sdk.StructuredData{"id1": "6"},
-			Payload: sdk.Change{
-				After: sdk.StructuredData{
-					"foo": "bar",
-				},
+	want := sdk.Record{
+		Position:  sdk.Position("foo"),
+		Operation: sdk.OperationCreate,
+		Key:       sdk.StructuredData{"id1": "6"},
+		Payload: sdk.Change{
+			After: sdk.StructuredData{
+				"foo": "bar",
 			},
 		},
 	}
@@ -122,16 +174,22 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	// first client closed the stream with server
 	err = stream1.CloseSend()
 	is.NoErr(err)
-	time.Sleep(1 * time.Second)
 
 	// second client should be able to connect to server
 	stream2 := createTestClient(t, dialer)
 
-	record, err := toproto.Record(records[0])
+	record, err := toproto.Record(want)
 	is.NoErr(err)
 	// second stream should work
 	err = stream2.Send(record)
 	is.NoErr(err)
+
+	select {
+	case got := <-server.RecordCh:
+		is.Equal(got, want)
+	case <-time.After(time.Second):
+		is.Fail() // record not received in time
+	}
 }
 
 func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Server, error) {
@@ -140,7 +198,7 @@ func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Serve
 	pb.RegisterSourceServiceServer(grpcSrv, server)
 	go func() {
 		if err := grpcSrv.Serve(lis); err != nil {
-			return
+			t.Error(err)
 		}
 	}()
 	t.Cleanup(func() {
@@ -169,21 +227,4 @@ func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (
 		is.NoErr(err)
 	})
 	return stream
-}
-
-func sendExpectedRecords(t *testing.T, stream pb.SourceService_StreamClient, records []sdk.Record) error {
-	is := is.New(t)
-	for _, r := range records {
-		record, err := toproto.Record(r)
-		is.NoErr(err)
-		err = stream.Send(record)
-		is.NoErr(err)
-	}
-	for i := range records {
-		// block until ack is received
-		ack, err := stream.Recv()
-		is.NoErr(err)
-		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
-	}
-	return nil
 }

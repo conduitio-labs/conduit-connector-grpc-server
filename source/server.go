@@ -16,8 +16,10 @@ package source
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sync/atomic"
 
 	"github.com/conduitio-labs/conduit-connector-grpc-server/fromproto"
@@ -29,7 +31,8 @@ import (
 type Server struct {
 	pb.UnimplementedSourceServiceServer
 
-	RecordCh    chan sdk.Record
+	RecordCh chan sdk.Record
+
 	teardown    chan struct{}
 	openContext context.Context
 
@@ -48,7 +51,7 @@ func NewServer(ctx context.Context) *Server {
 func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	if !s.stream.CompareAndSwap(nil, &stream) {
 		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
-		return fmt.Errorf("only one client connection is supported")
+		return errors.New("only one client connection is supported")
 	}
 	t := &tomb.Tomb{}
 	s.tomb.Store(&t)
@@ -57,33 +60,31 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	}()
 
 	// spawn a go routine to receive records from client
-	t.Go(func() error { return s.recvRecords(t, stream) })
+	t.Go(func() error { return s.recvRecords(stream) })
 
-	var err error
 	select {
 	case <-s.openContext.Done():
 		t.Kill(nil)
-		// block until teardown is called and this channel is closed
 		<-s.teardown
-		if !t.Alive() {
-			err = t.Err()
-		}
 	case <-s.teardown:
+		// close the stream, don't receive or send any more data
 		t.Kill(nil)
 	case <-t.Dying():
-		// wait for tomb to die
-		err = t.Wait()
+		// a goroutine returned an error, close the stream
+		err := t.Err()
+		if err != nil {
+			sdk.Logger(s.openContext).Warn().Msg(err.Error())
+		}
+		return err
 	}
-	if err != nil {
-		sdk.Logger(s.openContext).Warn().Msg(err.Error())
-	}
-	return err
+
+	return nil
 }
 
-func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer) error {
+func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 	for {
 		record, err := stream.Recv()
-		if err == io.EOF && s.openContext.Err() != nil {
+		if status.Code(err) == codes.Canceled && s.openContext.Err() != nil {
 			// stop signal was received
 			return nil
 		}
@@ -97,9 +98,9 @@ func (s *Server) recvRecords(t *tomb.Tomb, stream pb.SourceService_StreamServer)
 		// make sure the record channel is not closed
 		select {
 		case s.RecordCh <- sdkRecord:
-		// worked fine!
-		case <-t.Dying():
-			return t.Err()
+			// worked fine!
+		case <-s.openContext.Done():
+			return nil
 		}
 	}
 }

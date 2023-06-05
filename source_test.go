@@ -17,10 +17,7 @@ package grpcserver
 import (
 	"bytes"
 	"context"
-	"net"
-	"testing"
-	"time"
-
+	"errors"
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -28,6 +25,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
+	"net"
+	"testing"
+	"time"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
@@ -90,8 +90,12 @@ func TestRead_Success(t *testing.T) {
 	// prepare client
 	stream := createTestClient(t, dialer)
 	go func() {
-		err := sendExpectedRecords(t, stream, records)
-		is.NoErr(err)
+		for _, r := range records {
+			record, err := toproto.Record(r)
+			is.NoErr(err)
+			err = stream.Send(record)
+			is.NoErr(err)
+		}
 	}()
 
 	// read and assert records, send acks
@@ -103,7 +107,41 @@ func TestRead_Success(t *testing.T) {
 		is.NoErr(err)
 	}
 	// wait for ack to be received
-	time.Sleep(500 * time.Millisecond)
+	for i := range records {
+		// block until ack is received
+		ack, err := stream.Recv()
+		is.NoErr(err)
+		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
+	}
+}
+
+func TestRead_CloseListener(t *testing.T) {
+	is := is.New(t)
+	// use in-memory connection
+	lis := bufconn.Listen(1024 * 1024)
+
+	ctx := context.Background()
+	src := NewSourceWithListener(lis)
+	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
+	is.NoErr(err)
+	err = src.Open(ctx, nil)
+	is.NoErr(err)
+	defer func(src sdk.Source, ctx context.Context) {
+		err := src.Teardown(ctx)
+		is.NoErr(err)
+	}(src, ctx)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Millisecond*100)
+	defer cancel()
+	_, err = src.Read(timeoutCtx)
+	is.True(errors.Is(err, context.DeadlineExceeded))
+
+	err = lis.Close()
+	is.NoErr(err)
+
+	_, err = src.Read(ctx)
+	is.True(err != nil)
+	is.True(!errors.Is(err, context.DeadlineExceeded))
 }
 
 func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
@@ -125,21 +163,4 @@ func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
 	return stream
-}
-
-func sendExpectedRecords(t *testing.T, stream pb.SourceService_StreamClient, records []sdk.Record) error {
-	is := is.New(t)
-	for _, r := range records {
-		record, err := toproto.Record(r)
-		is.NoErr(err)
-		err = stream.Send(record)
-		is.NoErr(err)
-	}
-	for i := range records {
-		// block until ack is received
-		ack, err := stream.Recv()
-		is.NoErr(err)
-		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
-	}
-	return nil
 }

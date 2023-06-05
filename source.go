@@ -68,10 +68,10 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
-func (s *Source) Open(ctx context.Context, pos sdk.Position) error {
+func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
 	sdk.Logger(ctx).Info().Msg("Opening Source...")
 	s.server = source.NewServer(ctx)
-	err := s.runServer(ctx)
+	err := s.runServer()
 	if err != nil {
 		return err
 	}
@@ -87,6 +87,8 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 			return sdk.Record{}, fmt.Errorf("record channel is closed")
 		}
 		return record, nil
+	case err := <-s.errCh:
+		return sdk.Record{}, fmt.Errorf("gRPC server error: %w", err)
 	}
 }
 
@@ -113,7 +115,7 @@ func (s *Source) Teardown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Source) runServer(ctx context.Context) error {
+func (s *Source) runServer() error {
 	// listener can be set for test purposes
 	if s.listener == nil {
 		lis, err := net.Listen("tcp", s.config.URL)
@@ -129,7 +131,6 @@ func (s *Source) runServer(ctx context.Context) error {
 	go func() {
 		if err := s.grpcSrv.Serve(s.listener); err != nil {
 			s.errCh <- fmt.Errorf("failed to serve")
-			return
 		}
 		close(s.errCh)
 	}()
