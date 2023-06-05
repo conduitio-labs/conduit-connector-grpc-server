@@ -18,6 +18,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
+	"testing"
+	"time"
+
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -25,9 +29,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
-	"net"
-	"testing"
-	"time"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {

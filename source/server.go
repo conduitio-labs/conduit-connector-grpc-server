@@ -18,13 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"sync/atomic"
 
 	"github.com/conduitio-labs/conduit-connector-grpc-server/fromproto"
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/tomb.v2"
 )
 
