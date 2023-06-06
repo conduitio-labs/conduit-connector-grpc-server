@@ -1,49 +1,65 @@
-package connectorname
+// Copyright © 2023 Meroxa, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package grpcserver
 
 //go:generate paramgen -output=paramgen_src.go SourceConfig
 
 import (
 	"context"
 	"fmt"
+	"net"
 
+	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
+	"github.com/conduitio-labs/conduit-connector-grpc-server/source"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"google.golang.org/grpc"
 )
 
 type Source struct {
 	sdk.UnimplementedSource
 
-	config           SourceConfig
-	lastPositionRead sdk.Position //nolint:unused // this is just an example
+	config SourceConfig
+	server *source.Server
+
+	// for stopping the server
+	grpcSrv *grpc.Server
+	errCh   chan error
+
+	// used only for injecting a listener in tests
+	listener net.Listener
 }
 
 type SourceConfig struct {
-	// Config includes parameters that are the same in the source and destination.
-	Config
-	// SourceConfigParam is named foo and must be provided by the user.
-	SourceConfigParam string `json:"foo" validate:"required"`
+	// url to gRPC server
+	URL string `json:"url" validate:"required"`
+}
+
+// NewSourceWithListener for testing purposes.
+func NewSourceWithListener(lis net.Listener) sdk.Source {
+	return sdk.SourceWithMiddleware(&Source{listener: lis}, sdk.DefaultSourceMiddleware()...)
 }
 
 func NewSource() sdk.Source {
-	// Create Source and wrap it in the default middleware.
-	return sdk.SourceWithMiddleware(&Source{})
+	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware()...)
 }
 
 func (s *Source) Parameters() map[string]sdk.Parameter {
-	// Parameters is a map of named Parameters that describe how to configure
-	// the Source. Parameters can be generated from SourceConfig with paramgen.
 	return s.config.Parameters()
 }
 
 func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
-	// Configure is the first function to be called in a connector. It provides
-	// the connector with the configuration that can be validated and stored.
-	// In case the configuration is not valid it should return an error.
-	// Testing if your connector can reach the configured data source should be
-	// done in Open, not in Configure.
-	// The SDK will validate the configuration and populate default values
-	// before calling Configure. If you need to do more complex validations you
-	// can do them manually here.
-
 	sdk.Logger(ctx).Info().Msg("Configuring Source...")
 	err := sdk.Util.ParseConfig(cfg, &s.config)
 	if err != nil {
@@ -52,47 +68,71 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
-func (s *Source) Open(ctx context.Context, pos sdk.Position) error {
-	// Open is called after Configure to signal the plugin it can prepare to
-	// start producing records. If needed, the plugin should open connections in
-	// this function. The position parameter will contain the position of the
-	// last record that was successfully processed, Source should therefore
-	// start producing records after this position. The context passed to Open
-	// will be cancelled once the plugin receives a stop signal from Conduit.
+func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
+	sdk.Logger(ctx).Info().Msg("Opening Source...")
+	s.server = source.NewServer(ctx)
+	err := s.runServer()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
-	// Read returns a new Record and is supposed to block until there is either
-	// a new record or the context gets cancelled. It can also return the error
-	// ErrBackoffRetry to signal to the SDK it should call Read again with a
-	// backoff retry.
-	// If Read receives a cancelled context or the context is cancelled while
-	// Read is running it must stop retrieving new records from the source
-	// system and start returning records that have already been buffered. If
-	// there are no buffered records left Read must return the context error to
-	// signal a graceful stop. If Read returns ErrBackoffRetry while the context
-	// is cancelled it will also signal that there are no records left and Read
-	// won't be called again.
-	// After Read returns an error the function won't be called again (except if
-	// the error is ErrBackoffRetry, as mentioned above).
-	// Read can be called concurrently with Ack.
-	return sdk.Record{}, nil
+	select {
+	case <-ctx.Done():
+		return sdk.Record{}, ctx.Err()
+	case record, ok := <-s.server.RecordCh:
+		if !ok {
+			return sdk.Record{}, fmt.Errorf("record channel is closed")
+		}
+		return record, nil
+	case err := <-s.errCh:
+		return sdk.Record{}, fmt.Errorf("gRPC server error: %w", err)
+	}
 }
 
 func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
-	// Ack signals to the implementation that the record with the supplied
-	// position was successfully processed. This method might be called after
-	// the context of Read is already cancelled, since there might be
-	// outstanding acks that need to be delivered. When Teardown is called it is
-	// guaranteed there won't be any more calls to Ack.
-	// Ack can be called concurrently with Read.
-	return nil
+	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
+	return s.server.SendAck(position)
 }
 
 func (s *Source) Teardown(ctx context.Context) error {
-	// Teardown signals to the plugin that there will be no more calls to any
-	// other function. After Teardown returns, the plugin should be ready for a
-	// graceful shutdown.
+	if s.server != nil {
+		s.server.Close()
+	}
+	if s.grpcSrv != nil {
+		s.grpcSrv.Stop()
+		// check if an error happened while stopping server
+		err, ok := <-s.errCh
+		if err != nil {
+			return err
+		}
+		if ok {
+			close(s.errCh)
+		}
+	}
+	return nil
+}
+
+func (s *Source) runServer() error {
+	// listener can be set for test purposes
+	if s.listener == nil {
+		lis, err := net.Listen("tcp", s.config.URL)
+		if err != nil {
+			return fmt.Errorf("failed to listen: %w", err)
+		}
+		s.listener = lis
+	}
+	s.grpcSrv = grpc.NewServer()
+	pb.RegisterSourceServiceServer(s.grpcSrv, s.server)
+
+	s.errCh = make(chan error)
+	go func() {
+		if err := s.grpcSrv.Serve(s.listener); err != nil {
+			s.errCh <- fmt.Errorf("failed to serve")
+		}
+		close(s.errCh)
+	}()
 	return nil
 }

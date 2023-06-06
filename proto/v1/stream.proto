@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package protov1;
+
+import "opencdc/v1/opencdc.proto";
+
+service SourceService {
+  rpc Stream (stream opencdc.v1.Record) returns (stream Ack) {}
+}
+
+message Ack {
+  bytes ack_position = 1;
+}

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcserver
+package source
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net"
 	"testing"
 	"time"
@@ -31,20 +30,17 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-func TestTeardownSource_NoOpen(t *testing.T) {
-	is := is.New(t)
-	con := NewSource()
-	err := con.Teardown(context.Background())
-	is.NoErr(err)
-}
-
-func TestRead_Success(t *testing.T) {
+func TestServer_Success(t *testing.T) {
 	is := is.New(t)
 	// use in-memory connection
 	lis := bufconn.Listen(1024 * 1024)
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
 		return lis.DialContext(ctx)
 	}
+	ctx := context.Background()
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	defer server.Close()
 
 	records := []sdk.Record{
 		{
@@ -77,17 +73,6 @@ func TestRead_Success(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	src := NewSourceWithListener(lis)
-	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
-	is.NoErr(err)
-	err = src.Open(ctx, nil)
-	is.NoErr(err)
-	defer func(src sdk.Source, ctx context.Context) {
-		err := src.Teardown(ctx)
-		is.NoErr(err)
-	}(src, ctx)
-
 	// prepare client
 	stream := createTestClient(t, dialer)
 	go func() {
@@ -101,13 +86,14 @@ func TestRead_Success(t *testing.T) {
 
 	// read and assert records, send acks
 	for _, rec := range records {
-		got, err := src.Read(ctx)
-		is.NoErr(err)
+		got, ok := <-server.RecordCh
+		is.True(ok)
 		is.Equal(got, rec)
-		err = src.Ack(ctx, rec.Position)
+		err = server.SendAck(rec.Position)
 		is.NoErr(err)
 	}
-	// wait for ack to be received
+
+	// wait for acks to be received
 	for i := range records {
 		// block until ack is received
 		ack, err := stream.Recv()
@@ -116,33 +102,110 @@ func TestRead_Success(t *testing.T) {
 	}
 }
 
-func TestRead_CloseListener(t *testing.T) {
+func TestServer_StopSignal(t *testing.T) {
 	is := is.New(t)
 	// use in-memory connection
 	lis := bufconn.Listen(1024 * 1024)
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
+		return lis.DialContext(ctx)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	defer server.Close()
 
+	// prepare client
+	stream := createTestClient(t, dialer)
+
+	want := sdk.Record{Position: sdk.Position("foo")}
+	record, err := toproto.Record(want)
+	is.NoErr(err)
+	err = stream.Send(record)
+	is.NoErr(err)
+
+	// read and assert records, send acks
+	select {
+	case got := <-server.RecordCh:
+		is.Equal(got, want)
+	case <-time.After(time.Second):
+		is.Fail() // record not received in time
+	}
+
+	// cancel the open context, which signals a stop
+	cancel()
+
+	tomb := server.tomb.Load()
+	select {
+	case <-(*tomb).Dying():
+		// this is expected
+	case <-time.After(time.Second):
+		is.Fail() // tomb didn't start dying
+	}
+
+	err = server.SendAck(want.Position)
+	is.NoErr(err)
+}
+
+func TestServer_ClientStreamClosed(t *testing.T) {
+	is := is.New(t)
+	// use in-memory connection
+	lis := bufconn.Listen(1024 * 1024)
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
+		return lis.DialContext(ctx)
+	}
 	ctx := context.Background()
-	src := NewSourceWithListener(lis)
-	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
+	server, err := runServer(t, lis, ctx)
 	is.NoErr(err)
-	err = src.Open(ctx, nil)
+	defer server.Close()
+
+	want := sdk.Record{
+		Position:  sdk.Position("foo"),
+		Operation: sdk.OperationCreate,
+		Key:       sdk.StructuredData{"id1": "6"},
+		Payload: sdk.Change{
+			After: sdk.StructuredData{
+				"foo": "bar",
+			},
+		},
+	}
+
+	// create first client
+	stream1 := createTestClient(t, dialer)
+	// first client closed the stream with server
+	err = stream1.CloseSend()
 	is.NoErr(err)
-	defer func(src sdk.Source, ctx context.Context) {
-		err := src.Teardown(ctx)
-		is.NoErr(err)
-	}(src, ctx)
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Millisecond*100)
-	defer cancel()
-	_, err = src.Read(timeoutCtx)
-	is.True(errors.Is(err, context.DeadlineExceeded))
+	// second client should be able to connect to server
+	stream2 := createTestClient(t, dialer)
 
-	err = lis.Close()
+	record, err := toproto.Record(want)
+	is.NoErr(err)
+	// second stream should work
+	err = stream2.Send(record)
 	is.NoErr(err)
 
-	_, err = src.Read(ctx)
-	is.True(err != nil)
-	is.True(!errors.Is(err, context.DeadlineExceeded))
+	select {
+	case got := <-server.RecordCh:
+		is.Equal(got, want)
+	case <-time.After(time.Second):
+		is.Fail() // record not received in time
+	}
+}
+
+func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Server, error) {
+	server := NewServer(ctx)
+	grpcSrv := grpc.NewServer()
+	pb.RegisterSourceServiceServer(grpcSrv, server)
+	go func() {
+		if err := grpcSrv.Serve(lis); err != nil {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		grpcSrv.Stop()
+	})
+
+	return server, nil
 }
 
 func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
@@ -156,12 +219,12 @@ func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (
 		grpc.WithContextDialer(dialer),
 	)
 	is.NoErr(err)
-	t.Cleanup(func() {
-		err = conn.Close()
-		is.NoErr(err)
-	})
 	client := pb.NewSourceServiceClient(conn)
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
+	t.Cleanup(func() {
+		err := conn.Close()
+		is.NoErr(err)
+	})
 	return stream
 }

@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build tools
+
 package grpcserver
 
 import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	_ "github.com/conduitio/conduit-connector-sdk/cmd/paramgen"
+	_ "github.com/golang/mock/mockgen"
 )
-
-// Connector combines all constructors for each plugin in one struct.
-var Connector = sdk.Connector{
-	NewSpecification: Specification,
-	NewSource:        NewSource,
-	NewDestination:   nil,
-}

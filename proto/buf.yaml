@@ -1,0 +1,10 @@
+version: v1
+name: buf.build/conduit-labs/conduit-connector-grpc-server
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
+deps:
+  - buf.build/conduitio/conduit-connector-protocol
