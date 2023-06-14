@@ -1,4 +1,4 @@
-.PHONY: build test test-integration generate install-paramgen proto-generate download install-tools
+.PHONY: build test test-integration generate install-paramgen proto-generate download install-tools generate-certs
 
 VERSION=$(shell git describe --tags --dirty --always)
 
@@ -25,3 +25,6 @@ install-tools: download
 	@echo Installing tools from tools.go
 	@go list -f '{{ join .Imports "\n" }}' tools.go | xargs -tI % go install %
 	@go mod tidy
+
+generate-certs:
+	sh cmd/generate-certs.sh

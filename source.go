@@ -18,6 +18,8 @@ package grpcserver
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 
@@ -25,6 +27,7 @@ import (
 	"github.com/conduitio-labs/conduit-connector-grpc-server/source"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type Source struct {
@@ -39,11 +42,14 @@ type Source struct {
 
 	// used only for injecting a listener in tests
 	listener net.Listener
+
+	// mTLS
+	serverCert tls.Certificate
+	caCertPool *x509.CertPool
 }
 
 type SourceConfig struct {
-	// url to gRPC server
-	URL string `json:"url" validate:"required"`
+	Config
 }
 
 // NewSourceWithListener for testing purposes.
@@ -64,6 +70,12 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 	err := sdk.Util.ParseConfig(cfg, &s.config)
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
+	}
+	if !s.config.TLSDisable {
+		s.serverCert, s.caCertPool, err = s.config.ParseMTLSFiles()
+		if err != nil {
+			return fmt.Errorf("invalid mTLS config: %w", err)
+		}
 	}
 	return nil
 }
@@ -124,7 +136,19 @@ func (s *Source) runServer() error {
 		}
 		s.listener = lis
 	}
-	s.grpcSrv = grpc.NewServer()
+
+	serverOptions := make([]grpc.ServerOption, 0, 1)
+	if !s.config.TLSDisable {
+		// create TLS credentials with mTLS configuration
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{s.serverCert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    s.caCertPool,
+			MinVersion:   tls.VersionTLS12,
+		})
+		serverOptions = append(serverOptions, grpc.Creds(creds))
+	}
+	s.grpcSrv = grpc.NewServer(serverOptions...)
 	pb.RegisterSourceServiceServer(s.grpcSrv, s.server)
 
 	s.errCh = make(chan error)
