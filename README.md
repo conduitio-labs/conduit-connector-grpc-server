@@ -19,9 +19,13 @@ stream.
 
 ### Configuration
 
-| name        | description                                                            | required | default value |
-|-------------|------------------------------------------------------------------------|----------|---------------|
-| `url`       | url to gRPC server.                                                    | true     |               |
+| name                   | description                                                                          | required                             | default value |
+|------------------------|--------------------------------------------------------------------------------------|--------------------------------------|---------------|
+| `url`                  | url to gRPC server.                                                                  | true                                 |               |
+| `tls.disable`          | flag to disable mTLS secure connection, set it to `true` for an insecure connection. | false                                | `false`       |
+| `tls.server.certPath`  | the server certificate path.                                                         | required if `tls.disable` is `false` |               |
+| `tls.server.keyPath`   | the server private key path.                                                         | required if `tls.disable` is `false` |               |
+| `tls.CA.certPath`      | the root CA certificate path.                                                        | required if `tls.disable` is `false` |               |
 
 ## Planned work
 - Add a destination for gRPC server. 

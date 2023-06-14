@@ -26,13 +26,13 @@ import (
 type Config struct {
 	// url to gRPC server
 	URL string `json:"url" validate:"required"`
-	// the server certificate path
+	// the server certificate path.
 	TLSServerCertPath string `json:"tls.server.certPath"`
-	// the server private key path
+	// the server private key path.
 	TLSServerKeyPath string `json:"tls.server.keyPath"`
-	// the root CA certificate path
+	// the root CA certificate path.
 	TLSCACertPath string `json:"tls.CA.certPath"`
-	// flag to disable mTLS secure connection
+	// flag to disable mTLS secure connection, set it to `true` for an insecure connection.
 	TLSDisable bool `json:"tls.disable" default:"false"`
 }
 

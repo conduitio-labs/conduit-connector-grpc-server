@@ -11,25 +11,25 @@ func (SourceConfig) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
 		"tls.CA.certPath": {
 			Default:     "",
-			Description: "the root CA certificate path",
+			Description: "the root CA certificate path.",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},
 		"tls.disable": {
 			Default:     "false",
-			Description: "flag to disable mTLS secure connection",
+			Description: "flag to disable mTLS secure connection, set it to `true` for an insecure connection.",
 			Type:        sdk.ParameterTypeBool,
 			Validations: []sdk.Validation{},
 		},
 		"tls.server.certPath": {
 			Default:     "",
-			Description: "the server certificate path",
+			Description: "the server certificate path.",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},
 		"tls.server.keyPath": {
 			Default:     "",
-			Description: "the server private key path",
+			Description: "the server private key path.",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},
