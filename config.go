@@ -39,7 +39,6 @@ type Config struct {
 // ParseMTLSFiles parses and validates mTLS params values, returns the parsed server certificate, and CA certificate pool,
 // and an error if the parsing fails
 func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
-	// todo check flag here?
 	if c.TLSCACertPath == "" || c.TLSServerCertPath == "" || c.TLSServerKeyPath == "" {
 		return tls.Certificate{}, nil, fmt.Errorf("mTLS security is enabled, %q & %q & %q must all be provided, if you wish to disable mTLS"+
 			" secure connection, set the %q flag to true", "tls.server.certPath", "tls.server.keyPath", "tls.CA.certPath", "tls.disable")
