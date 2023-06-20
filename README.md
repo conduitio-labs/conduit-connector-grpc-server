@@ -27,5 +27,12 @@ stream.
 | `tls.server.keyPath`   | the server private key path.                                                         | required if `tls.disable` is `false` |               |
 | `tls.CA.certPath`      | the root CA certificate path.                                                        | required if `tls.disable` is `false` |               |
 
+## Mutual TLS (mTLS)
+Mutual TLS secure connection is used by default to connect to the server, to disable mTLS you can set the parameter `tls.disable`
+to `true`, this will result in an insecure connection to the server.
+
+To generate self-signed certificates for both a server and a client, run `make generate-certs`, this will generate certificates
+under the directory `./test/certs`.
+
 ## Planned work
 - Add a destination for gRPC server. 
