@@ -53,7 +53,6 @@ func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
 		return tls.Certificate{}, nil, fmt.Errorf("failed to read CA certificate: %w", err)
 	}
 	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
 	if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
 		return tls.Certificate{}, nil, errors.New("failed to append CA certs")
 	}
