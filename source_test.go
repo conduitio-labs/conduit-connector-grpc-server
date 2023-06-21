@@ -37,11 +37,11 @@ import (
 )
 
 const (
-	ClientCertPath = "./test/certs/client.crt"
-	ClientKeyPath  = "./test/certs/client.key"
-	ServerCertPath = "./test/certs/server.crt"
-	ServerKeyPath  = "./test/certs/server.key"
-	CACertPath     = "./test/certs/ca.crt"
+	clientCertPath = "./test/certs/client.crt"
+	clientKeyPath  = "./test/certs/client.key"
+	serverCertPath = "./test/certs/server.crt"
+	serverKeyPath  = "./test/certs/server.key"
+	caCertPath     = "./test/certs/ca.crt"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
@@ -59,8 +59,8 @@ func TestConfigure_DisableMTLS(t *testing.T) {
 		"url":                 "localhost",
 		"tls.disable":         "false",
 		"tls.server.certPath": "", // empty path, should fail
-		"tls.server.keyPath":  ServerKeyPath,
-		"tls.CA.certPath":     CACertPath,
+		"tls.server.keyPath":  serverKeyPath,
+		"tls.CA.certPath":     caCertPath,
 	})
 	is.True(err != nil)
 	err = src.Configure(ctx, map[string]string{
@@ -114,9 +114,9 @@ func TestRead_Success(t *testing.T) {
 	src := NewSourceWithListener(lis)
 	err := src.Configure(ctx, map[string]string{
 		"url":                 "bufnet",
-		"tls.server.certPath": ServerCertPath,
-		"tls.server.keyPath":  ServerKeyPath,
-		"tls.CA.certPath":     CACertPath,
+		"tls.server.certPath": serverCertPath,
+		"tls.server.keyPath":  serverKeyPath,
+		"tls.CA.certPath":     caCertPath,
 	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
@@ -194,9 +194,9 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 		grpc.WithBlock(),
 	}
 	if enableMTLS {
-		clientCert, err := tls.LoadX509KeyPair(ClientCertPath, ClientKeyPath)
+		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
 		is.NoErr(err)
-		caCert, err := os.ReadFile(CACertPath)
+		caCert, err := os.ReadFile(caCertPath)
 		is.NoErr(err)
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
