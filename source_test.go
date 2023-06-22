@@ -56,17 +56,17 @@ func TestConfigure_DisableMTLS(t *testing.T) {
 	ctx := context.Background()
 	src := NewSource()
 	err := src.Configure(ctx, map[string]string{
-		"url":                 "localhost",
-		"tls.disable":         "false",
-		"tls.server.certPath": "", // empty path, should fail
-		"tls.server.keyPath":  serverKeyPath,
-		"tls.CA.certPath":     caCertPath,
+		"url":                  "localhost",
+		"mtls.disable":         "false",
+		"mtls.server.certPath": "", // empty path, should fail
+		"mtls.server.keyPath":  serverKeyPath,
+		"mtls.CA.certPath":     caCertPath,
 	})
 	is.True(err != nil)
 	err = src.Configure(ctx, map[string]string{
-		"url":                 "localhost",
-		"tls.disable":         "true", // disabled
-		"tls.server.certPath": "",     // should be ok
+		"url":                  "localhost",
+		"mtls.disable":         "true", // disabled
+		"mtls.server.certPath": "",     // should be ok
 	})
 	is.NoErr(err)
 }
@@ -113,10 +113,10 @@ func TestRead_Success(t *testing.T) {
 	ctx := context.Background()
 	src := NewSourceWithListener(lis)
 	err := src.Configure(ctx, map[string]string{
-		"url":                 "bufnet",
-		"tls.server.certPath": serverCertPath,
-		"tls.server.keyPath":  serverKeyPath,
-		"tls.CA.certPath":     caCertPath,
+		"url":                  "bufnet",
+		"mtls.server.certPath": serverCertPath,
+		"mtls.server.keyPath":  serverKeyPath,
+		"mtls.CA.certPath":     caCertPath,
 	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
@@ -162,8 +162,8 @@ func TestRead_CloseListener(t *testing.T) {
 	ctx := context.Background()
 	src := NewSourceWithListener(lis)
 	err := src.Configure(ctx, map[string]string{
-		"url":         "localhost",
-		"tls.disable": "true",
+		"url":          "localhost",
+		"mtls.disable": "true",
 	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
@@ -205,7 +205,7 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{clientCert},
 			RootCAs:      caCertPool,
-			MinVersion:   tls.VersionTLS12,
+			MinVersion:   tls.VersionTLS13,
 		})
 		dialOptions = append(dialOptions, grpc.WithTransportCredentials(creds))
 	} else {

@@ -20,35 +20,44 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	sdk "github.com/conduitio/conduit-connector-sdk"
+	"go.uber.org/multierr"
 )
 
 // Config has the generic parameters needed for a gRPC server
 type Config struct {
 	// url to gRPC server
 	URL string `json:"url" validate:"required"`
+	// mTLS configurations.
+	MTLS MTLSConfig `json:"mtls"`
+}
+
+type MTLSConfig struct {
 	// the server certificate path.
-	TLSServerCertPath string `json:"tls.server.certPath"`
+	ServerCertPath string `json:"server.certPath"`
 	// the server private key path.
-	TLSServerKeyPath string `json:"tls.server.keyPath"`
+	ServerKeyPath string `json:"server.keyPath"`
 	// the root CA certificate path.
-	TLSCACertPath string `json:"tls.CA.certPath"`
+	CACertPath string `json:"CA.certPath"`
 	// flag to disable mTLS secure connection, set it to `true` for an insecure connection.
-	TLSDisable bool `json:"tls.disable" default:"false"`
+	Disable bool `json:"disable" default:"false"`
 }
 
 // ParseMTLSFiles parses and validates mTLS params values, returns the parsed server certificate, and CA certificate pool,
 // and an error if the parsing fails
 func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
-	if c.TLSCACertPath == "" || c.TLSServerCertPath == "" || c.TLSServerKeyPath == "" {
-		return tls.Certificate{}, nil, fmt.Errorf("mTLS security is enabled, %q & %q & %q must all be provided, if you wish to disable mTLS"+
-			" secure connection, set the %q flag to true", "tls.server.certPath", "tls.server.keyPath", "tls.CA.certPath", "tls.disable")
+	err := c.validateRequiredMTLSParams()
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("error validating \"mtls\": mTLS security is enabled and some"+
+			" configurations are missing, if you wish to disable mTLS, set the config option \"mtls.disable\" to true: %w", err)
 	}
-	serverCert, err := tls.LoadX509KeyPair(c.TLSServerCertPath, c.TLSServerKeyPath)
+	serverCert, err := tls.LoadX509KeyPair(c.MTLS.ServerCertPath, c.MTLS.ServerKeyPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("failed to load server key pair: %w", err)
 	}
 	// Load CA certificate
-	caCert, err := os.ReadFile(c.TLSCACertPath)
+	caCert, err := os.ReadFile(c.MTLS.CACertPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("failed to read CA certificate: %w", err)
 	}
@@ -57,4 +66,18 @@ func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
 		return tls.Certificate{}, nil, errors.New("failed to append CA certs")
 	}
 	return serverCert, caCertPool, nil
+}
+
+func (c *Config) validateRequiredMTLSParams() error {
+	var multiErr error
+	if c.MTLS.CACertPath == "" {
+		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.CA.certPath\": %w", sdk.ErrRequiredParameterMissing))
+	}
+	if c.MTLS.ServerCertPath == "" {
+		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.server.certPath\": %w", sdk.ErrRequiredParameterMissing))
+	}
+	if c.MTLS.ServerKeyPath == "" {
+		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.server.keyPath\": %w", sdk.ErrRequiredParameterMissing))
+	}
+	return multiErr
 }

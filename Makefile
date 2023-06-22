@@ -27,4 +27,4 @@ install-tools: download
 	@go mod tidy
 
 generate-certs:
-	sh cmd/generate-certs.sh
+	sh test/generate-certs.sh
