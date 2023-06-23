@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -190,6 +191,69 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	case <-time.After(time.Second):
 		is.Fail() // record not received in time
 	}
+}
+
+func TestServer_SendAckRetry(t *testing.T) {
+	is := is.New(t)
+	// use in-memory connection
+	lis := bufconn.Listen(1024 * 1024)
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) {
+		return lis.DialContext(ctx)
+	}
+	ctx := context.Background()
+	server, err := runServer(t, lis, ctx)
+	is.NoErr(err)
+	defer server.Close()
+
+	records := []sdk.Record{
+		{
+			Position:  sdk.Position("foo"),
+			Operation: sdk.OperationCreate,
+			Key:       sdk.StructuredData{"id1": "6"},
+			Payload: sdk.Change{
+				After: sdk.StructuredData{
+					"foo": "bar",
+				},
+			},
+		},
+	}
+
+	// prepare client
+	stream := createTestClient(t, dialer)
+	go func() {
+		for _, r := range records {
+			record, err := toproto.Record(r)
+			is.NoErr(err)
+			err = stream.Send(record)
+			is.NoErr(err)
+		}
+	}()
+
+	// read the first record
+	got, ok := <-server.RecordCh
+	is.True(ok)
+	is.Equal(got, records[0])
+	// stream is closed before ack was sent
+	err = stream.CloseSend()
+	is.NoErr(err)
+	// spawn a go routine to create a new stream after 1 second
+	var stream2 pb.SourceService_StreamClient
+	var stream2Mutex sync.Mutex
+	go func() {
+		time.Sleep(time.Second)
+		stream2Mutex.Lock()
+		stream2 = createTestClient(t, dialer)
+		stream2Mutex.Unlock()
+	}()
+	time.Sleep(500 * time.Millisecond)
+	err = server.SendAck(records[0].Position)
+	is.NoErr(err)
+
+	stream2Mutex.Lock()
+	ack, err := stream2.Recv()
+	stream2Mutex.Unlock()
+	is.NoErr(err)
+	is.True(bytes.Equal(ack.AckPosition, records[0].Position))
 }
 
 func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Server, error) {

@@ -31,7 +31,8 @@ import (
 type Server struct {
 	pb.UnimplementedSourceServiceServer
 
-	RecordCh chan sdk.Record
+	RecordCh      chan sdk.Record
+	StreamIsSetCh chan bool
 
 	teardown    chan struct{}
 	openContext context.Context
@@ -42,9 +43,10 @@ type Server struct {
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		RecordCh:    make(chan sdk.Record),
-		teardown:    make(chan struct{}),
-		openContext: ctx,
+		RecordCh:      make(chan sdk.Record),
+		teardown:      make(chan struct{}),
+		StreamIsSetCh: make(chan bool, 1),
+		openContext:   ctx,
 	}
 }
 
@@ -53,6 +55,11 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
 		return errors.New("only one client connection is supported")
 	}
+	// empty channel
+	for len(s.StreamIsSetCh) > 0 {
+		<-s.StreamIsSetCh
+	}
+	s.StreamIsSetCh <- true
 	t := &tomb.Tomb{}
 	s.tomb.Store(&t)
 	defer func() {
@@ -106,10 +113,10 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 }
 
 func (s *Server) SendAck(position sdk.Position) error {
-	stream := s.stream.Load()
-	if stream == nil {
-		return fmt.Errorf("no stream is open")
+	for s.stream.Load() == nil {
+		<-s.StreamIsSetCh
 	}
+	stream := s.stream.Load()
 	err := (*stream).Send(&pb.Ack{AckPosition: position})
 	if err != nil {
 		return fmt.Errorf("error while sending ack into stream: %w", err)
