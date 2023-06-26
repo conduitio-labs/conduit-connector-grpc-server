@@ -19,9 +19,23 @@ stream.
 
 ### Configuration
 
-| name        | description                                                            | required | default value |
-|-------------|------------------------------------------------------------------------|----------|---------------|
-| `url`       | url to gRPC server.                                                    | true     |               |
+| name                   | description                                                                            | required                               | default value |
+|------------------------|----------------------------------------------------------------------------------------|----------------------------------------|---------------|
+| `url`                  | url to gRPC server.                                                                    | true                                   |               |
+| `mtls.disabled`        | option to disable mTLS secure connection, set it to `true` for an insecure connection. | false                                  | `false`       |
+| `mtls.server.certPath` | the server certificate path.                                                           | required if `mtls.disabled` is `false` |               |
+| `mtls.server.keyPath`  | the server private key path.                                                           | required if `mtls.disabled` is `false` |               |
+| `mtls.ca.certPath`     | the root CA certificate path.                                                          | required if `mtls.disabled` is `false` |               |
+
+## Mutual TLS (mTLS)
+Mutual TLS is used by default to connect to the server, to disable mTLS you can set the parameter `mtls.disabled`
+to `true`, this will result in an insecure connection to the server.
+
+This repo contains self-signed certificates that can be used for local testing purposes, you can find them
+under `./test/certs`, note that these certificates are not meant to be used in production environment.
+
+To generate your own secure mTLS certificates, check
+[this tutorial](https://medium.com/weekly-webtips/how-to-generate-keys-for-mutual-tls-authentication-a90f53bcec64).
 
 ## Planned work
 - Add a destination for gRPC server. 

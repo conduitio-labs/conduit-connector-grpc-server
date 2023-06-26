@@ -17,8 +17,11 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -27,14 +30,44 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
+)
+
+const (
+	clientCertPath = "./test/certs/client.crt"
+	clientKeyPath  = "./test/certs/client.key"
+	serverCertPath = "./test/certs/server.crt"
+	serverKeyPath  = "./test/certs/server.key"
+	caCertPath     = "./test/certs/ca.crt"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
 	con := NewSource()
 	err := con.Teardown(context.Background())
+	is.NoErr(err)
+}
+
+func TestConfigure_DisableMTLS(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	src := NewSource()
+	err := src.Configure(ctx, map[string]string{
+		"url":                  "localhost",
+		"mtls.disabled":        "false",
+		"mtls.server.certPath": "", // empty path, should fail
+		"mtls.server.keyPath":  serverKeyPath,
+		"mtls.ca.certPath":     caCertPath,
+	})
+	is.True(err != nil)
+	err = src.Configure(ctx, map[string]string{
+		"url":                  "localhost",
+		"mtls.disabled":        "true", // disabled
+		"mtls.server.certPath": "",     // should be ok
+	})
 	is.NoErr(err)
 }
 
@@ -79,7 +112,12 @@ func TestRead_Success(t *testing.T) {
 
 	ctx := context.Background()
 	src := NewSourceWithListener(lis)
-	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
+	err := src.Configure(ctx, map[string]string{
+		"url":                  "bufnet",
+		"mtls.server.certPath": serverCertPath,
+		"mtls.server.keyPath":  serverKeyPath,
+		"mtls.ca.certPath":     caCertPath,
+	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
 	is.NoErr(err)
@@ -89,7 +127,7 @@ func TestRead_Success(t *testing.T) {
 	}(src, ctx)
 
 	// prepare client
-	stream := createTestClient(t, dialer)
+	stream := createTestClient(t, true, dialer)
 	go func() {
 		for _, r := range records {
 			record, err := toproto.Record(r)
@@ -123,7 +161,10 @@ func TestRead_CloseListener(t *testing.T) {
 
 	ctx := context.Background()
 	src := NewSourceWithListener(lis)
-	err := src.Configure(ctx, map[string]string{"url": "bufnet"})
+	err := src.Configure(ctx, map[string]string{
+		"url":           "localhost",
+		"mtls.disabled": "true",
+	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
 	is.NoErr(err)
@@ -145,15 +186,37 @@ func TestRead_CloseListener(t *testing.T) {
 	is.True(!errors.Is(err, context.DeadlineExceeded))
 }
 
-func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
+func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
 	is := is.New(t)
+	dialOptions := []grpc.DialOption{
+		grpc.WithContextDialer(dialer),
+		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoff.DefaultConfig}),
+		grpc.WithBlock(),
+	}
+	if enableMTLS {
+		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+		is.NoErr(err)
+		caCert, err := os.ReadFile(caCertPath)
+		is.NoErr(err)
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		// create TLS credentials with mTLS configuration
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{clientCert},
+			RootCAs:      caCertPool,
+			MinVersion:   tls.VersionTLS13,
+		})
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(creds))
+	} else {
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+
 	ctx := context.Background()
 	conn, err := grpc.DialContext(
 		ctx,
-		"bufnet",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-		grpc.WithContextDialer(dialer),
+		"localhost",
+		dialOptions...,
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {

@@ -9,6 +9,30 @@ import (
 
 func (SourceConfig) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"mtls.ca.certPath": {
+			Default:     "",
+			Description: "the root CA certificate path.",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
+		"mtls.disabled": {
+			Default:     "false",
+			Description: "option to disable mTLS secure connection, set it to `true` for an insecure connection.",
+			Type:        sdk.ParameterTypeBool,
+			Validations: []sdk.Validation{},
+		},
+		"mtls.server.certPath": {
+			Default:     "",
+			Description: "the server certificate path.",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
+		"mtls.server.keyPath": {
+			Default:     "",
+			Description: "the server private key path.",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
 		"url": {
 			Default:     "",
 			Description: "url to gRPC server",
