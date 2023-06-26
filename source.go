@@ -71,8 +71,8 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
-	if !s.config.MTLS.Disable {
-		s.serverCert, s.caCertPool, err = s.config.ParseMTLSFiles()
+	if !s.config.MTLS.Disabled {
+		s.serverCert, s.caCertPool, err = s.config.MTLS.ParseMTLSFiles()
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (s *Source) runServer() error {
 	}
 
 	serverOptions := make([]grpc.ServerOption, 0, 1)
-	if !s.config.MTLS.Disable {
+	if !s.config.MTLS.Disabled {
 		// create TLS credentials with mTLS configuration
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{s.serverCert},

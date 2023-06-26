@@ -2,9 +2,9 @@
 
 # create a directory to store the generated keys and certificates
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-mkdir -p ${SCRIPT_DIR}/../test/certs
-rm -rf ${SCRIPT_DIR}/../test/certs/*.*
-cd ${SCRIPT_DIR}/../test/certs || exit
+mkdir -p ${SCRIPT_DIR}/certs
+rm -rf ${SCRIPT_DIR}/certs/*.*
+cd ${SCRIPT_DIR}/certs || exit
 
 # generate CA private key
 openssl genpkey -algorithm RSA -out ca.key

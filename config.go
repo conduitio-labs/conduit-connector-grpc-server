@@ -39,25 +39,25 @@ type MTLSConfig struct {
 	// the server private key path.
 	ServerKeyPath string `json:"server.keyPath"`
 	// the root CA certificate path.
-	CACertPath string `json:"CA.certPath"`
-	// flag to disable mTLS secure connection, set it to `true` for an insecure connection.
-	Disable bool `json:"disable" default:"false"`
+	CACertPath string `json:"ca.certPath"`
+	// option to disable mTLS secure connection, set it to `true` for an insecure connection.
+	Disabled bool `json:"disabled" default:"false"`
 }
 
 // ParseMTLSFiles parses and validates mTLS params values, returns the parsed server certificate, and CA certificate pool,
 // and an error if the parsing fails
-func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
-	err := c.validateRequiredMTLSParams()
+func (mc *MTLSConfig) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
+	err := mc.validateRequiredMTLSParams()
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("error validating \"mtls\": mTLS security is enabled and some"+
-			" configurations are missing, if you wish to disable mTLS, set the config option \"mtls.disable\" to true: %w", err)
+			" configurations are missing, if you wish to disable mTLS, set the config option \"mtls.disabled\" to true: %w", err)
 	}
-	serverCert, err := tls.LoadX509KeyPair(c.MTLS.ServerCertPath, c.MTLS.ServerKeyPath)
+	serverCert, err := tls.LoadX509KeyPair(mc.ServerCertPath, mc.ServerKeyPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("failed to load server key pair: %w", err)
 	}
 	// Load CA certificate
-	caCert, err := os.ReadFile(c.MTLS.CACertPath)
+	caCert, err := os.ReadFile(mc.CACertPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("failed to read CA certificate: %w", err)
 	}
@@ -68,15 +68,15 @@ func (c *Config) ParseMTLSFiles() (tls.Certificate, *x509.CertPool, error) {
 	return serverCert, caCertPool, nil
 }
 
-func (c *Config) validateRequiredMTLSParams() error {
+func (mc *MTLSConfig) validateRequiredMTLSParams() error {
 	var multiErr error
-	if c.MTLS.CACertPath == "" {
-		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.CA.certPath\": %w", sdk.ErrRequiredParameterMissing))
+	if mc.CACertPath == "" {
+		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.ca.certPath\": %w", sdk.ErrRequiredParameterMissing))
 	}
-	if c.MTLS.ServerCertPath == "" {
+	if mc.ServerCertPath == "" {
 		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.server.certPath\": %w", sdk.ErrRequiredParameterMissing))
 	}
-	if c.MTLS.ServerKeyPath == "" {
+	if mc.ServerKeyPath == "" {
 		multiErr = multierr.Append(multiErr, fmt.Errorf("error validating \"mtls.server.keyPath\": %w", sdk.ErrRequiredParameterMissing))
 	}
 	return multiErr

@@ -9,15 +9,15 @@ import (
 
 func (SourceConfig) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
-		"mtls.CA.certPath": {
+		"mtls.ca.certPath": {
 			Default:     "",
 			Description: "the root CA certificate path.",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},
-		"mtls.disable": {
+		"mtls.disabled": {
 			Default:     "false",
-			Description: "flag to disable mTLS secure connection, set it to `true` for an insecure connection.",
+			Description: "option to disable mTLS secure connection, set it to `true` for an insecure connection.",
 			Type:        sdk.ParameterTypeBool,
 			Validations: []sdk.Validation{},
 		},

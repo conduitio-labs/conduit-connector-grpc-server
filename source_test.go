@@ -57,15 +57,15 @@ func TestConfigure_DisableMTLS(t *testing.T) {
 	src := NewSource()
 	err := src.Configure(ctx, map[string]string{
 		"url":                  "localhost",
-		"mtls.disable":         "false",
+		"mtls.disabled":        "false",
 		"mtls.server.certPath": "", // empty path, should fail
 		"mtls.server.keyPath":  serverKeyPath,
-		"mtls.CA.certPath":     caCertPath,
+		"mtls.ca.certPath":     caCertPath,
 	})
 	is.True(err != nil)
 	err = src.Configure(ctx, map[string]string{
 		"url":                  "localhost",
-		"mtls.disable":         "true", // disabled
+		"mtls.disabled":        "true", // disabled
 		"mtls.server.certPath": "",     // should be ok
 	})
 	is.NoErr(err)
@@ -116,7 +116,7 @@ func TestRead_Success(t *testing.T) {
 		"url":                  "bufnet",
 		"mtls.server.certPath": serverCertPath,
 		"mtls.server.keyPath":  serverKeyPath,
-		"mtls.CA.certPath":     caCertPath,
+		"mtls.ca.certPath":     caCertPath,
 	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)
@@ -162,8 +162,8 @@ func TestRead_CloseListener(t *testing.T) {
 	ctx := context.Background()
 	src := NewSourceWithListener(lis)
 	err := src.Configure(ctx, map[string]string{
-		"url":          "localhost",
-		"mtls.disable": "true",
+		"url":           "localhost",
+		"mtls.disabled": "true",
 	})
 	is.NoErr(err)
 	err = src.Open(ctx, nil)

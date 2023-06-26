@@ -21,61 +21,51 @@ import (
 func TestConfig_ParseMTLSFiles(t *testing.T) {
 	testCases := []struct {
 		name    string
-		config  Config
+		config  MTLSConfig
 		wantErr bool
 	}{
 		{
 			name: "valid paths",
-			config: Config{
-				MTLS: MTLSConfig{
-					ServerCertPath: "./test/certs/server.crt",
-					ServerKeyPath:  "./test/certs/server.key",
-					CACertPath:     "./test/certs/ca.crt",
-				},
+			config: MTLSConfig{
+				ServerCertPath: "./test/certs/server.crt",
+				ServerKeyPath:  "./test/certs/server.key",
+				CACertPath:     "./test/certs/ca.crt",
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty values",
-			config: Config{
-				MTLS: MTLSConfig{
-					ServerCertPath: "",
-					ServerKeyPath:  "",
-					CACertPath:     "",
-				},
+			config: MTLSConfig{
+				ServerCertPath: "",
+				ServerKeyPath:  "",
+				CACertPath:     "",
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid paths",
-			config: Config{
-				MTLS: MTLSConfig{
-					ServerCertPath: "not a file",
-					ServerKeyPath:  "not a file",
-					CACertPath:     "not a file",
-				},
+			config: MTLSConfig{
+				ServerCertPath: "not a file",
+				ServerKeyPath:  "not a file",
+				CACertPath:     "not a file",
 			},
 			wantErr: true,
 		},
 		{
 			name: "switched files",
-			config: Config{
-				MTLS: MTLSConfig{
-					ServerCertPath: "./test/certs/server.key", // switched with server crt
-					ServerKeyPath:  "./test/certs/server.crt",
-					CACertPath:     "./test/certs/ca.crt",
-				},
+			config: MTLSConfig{
+				ServerCertPath: "./test/certs/server.key", // switched with server crt
+				ServerKeyPath:  "./test/certs/server.crt",
+				CACertPath:     "./test/certs/ca.crt",
 			},
 			wantErr: true,
 		},
 		{
 			name: "wrong CA cert path",
-			config: Config{
-				MTLS: MTLSConfig{
-					ServerCertPath: "./test/certs/server.crt",
-					ServerKeyPath:  "./test/certs/server.key",
-					CACertPath:     "./test/certs/ca.key", // key instead of crt, should fail
-				},
+			config: MTLSConfig{
+				ServerCertPath: "./test/certs/server.crt",
+				ServerKeyPath:  "./test/certs/server.key",
+				CACertPath:     "./test/certs/ca.key", // key instead of crt, should fail
 			},
 			wantErr: true,
 		},
