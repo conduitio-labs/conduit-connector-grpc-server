@@ -55,11 +55,12 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
 		return errors.New("only one client connection is supported")
 	}
-	// empty channel
-	for len(s.streamIsSetCh) > 0 {
-		<-s.streamIsSetCh
+	select {
+	case s.streamIsSetCh <- struct{}{}:
+		// successfully wrote to the channel
+	default:
+		// channel already contains a value
 	}
-	s.streamIsSetCh <- struct{}{}
 	t := &tomb.Tomb{}
 	s.tomb.Store(&t)
 	defer func() {
