@@ -31,11 +31,11 @@ import (
 type Server struct {
 	pb.UnimplementedSourceServiceServer
 
-	RecordCh      chan sdk.Record
-	StreamIsSetCh chan bool
+	RecordCh chan sdk.Record
 
-	teardown    chan struct{}
-	openContext context.Context
+	teardown      chan struct{}
+	streamIsSetCh chan struct{}
+	openContext   context.Context
 
 	stream atomic.Pointer[pb.SourceService_StreamServer]
 	tomb   atomic.Pointer[*tomb.Tomb]
@@ -45,7 +45,7 @@ func NewServer(ctx context.Context) *Server {
 	return &Server{
 		RecordCh:      make(chan sdk.Record),
 		teardown:      make(chan struct{}),
-		StreamIsSetCh: make(chan bool, 1),
+		streamIsSetCh: make(chan struct{}, 1),
 		openContext:   ctx,
 	}
 }
@@ -56,10 +56,10 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 		return errors.New("only one client connection is supported")
 	}
 	// empty channel
-	for len(s.StreamIsSetCh) > 0 {
-		<-s.StreamIsSetCh
+	for len(s.streamIsSetCh) > 0 {
+		<-s.streamIsSetCh
 	}
-	s.StreamIsSetCh <- true
+	s.streamIsSetCh <- struct{}{}
 	t := &tomb.Tomb{}
 	s.tomb.Store(&t)
 	defer func() {
@@ -112,14 +112,20 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 	}
 }
 
-func (s *Server) SendAck(position sdk.Position) error {
-	for s.stream.Load() == nil {
-		<-s.StreamIsSetCh
-	}
+func (s *Server) SendAck(ctx context.Context, position sdk.Position) error {
 	stream := s.stream.Load()
+	for stream == nil {
+		select {
+		case <-s.streamIsSetCh:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		stream = s.stream.Load()
+	}
 	err := (*stream).Send(&pb.Ack{AckPosition: position})
 	if err != nil {
-		return fmt.Errorf("error while sending ack into stream: %w", err)
+		sdk.Logger(ctx).Err(err).Msg("error while sending ack into stream")
+		return s.SendAck(ctx, position)
 	}
 	return nil
 }

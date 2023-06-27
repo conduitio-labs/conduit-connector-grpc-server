@@ -90,7 +90,7 @@ func TestServer_Success(t *testing.T) {
 		got, ok := <-server.RecordCh
 		is.True(ok)
 		is.Equal(got, rec)
-		err = server.SendAck(rec.Position)
+		err = server.SendAck(ctx, rec.Position)
 		is.NoErr(err)
 	}
 
@@ -143,7 +143,7 @@ func TestServer_StopSignal(t *testing.T) {
 		is.Fail() // tomb didn't start dying
 	}
 
-	err = server.SendAck(want.Position)
+	err = server.SendAck(ctx, want.Position)
 	is.NoErr(err)
 }
 
@@ -240,13 +240,13 @@ func TestServer_SendAckRetry(t *testing.T) {
 	var stream2 pb.SourceService_StreamClient
 	var stream2Mutex sync.Mutex
 	go func() {
-		time.Sleep(time.Second)
 		stream2Mutex.Lock()
+		time.Sleep(time.Second)
 		stream2 = createTestClient(t, dialer)
 		stream2Mutex.Unlock()
 	}()
 	time.Sleep(500 * time.Millisecond)
-	err = server.SendAck(records[0].Position)
+	err = server.SendAck(ctx, records[0].Position)
 	is.NoErr(err)
 
 	stream2Mutex.Lock()
