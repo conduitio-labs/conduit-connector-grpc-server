@@ -106,7 +106,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 
 func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
-	return s.server.SendAck(position)
+	return s.server.SendAck(ctx, position)
 }
 
 func (s *Source) Teardown(ctx context.Context) error {

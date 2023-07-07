@@ -33,8 +33,9 @@ type Server struct {
 
 	RecordCh chan sdk.Record
 
-	teardown    chan struct{}
-	openContext context.Context
+	teardown      chan struct{}
+	streamIsSetCh chan struct{}
+	openContext   context.Context
 
 	stream atomic.Pointer[pb.SourceService_StreamServer]
 	tomb   atomic.Pointer[*tomb.Tomb]
@@ -42,9 +43,10 @@ type Server struct {
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		RecordCh:    make(chan sdk.Record),
-		teardown:    make(chan struct{}),
-		openContext: ctx,
+		RecordCh:      make(chan sdk.Record),
+		teardown:      make(chan struct{}),
+		streamIsSetCh: make(chan struct{}, 1),
+		openContext:   ctx,
 	}
 }
 
@@ -52,6 +54,12 @@ func (s *Server) Stream(stream pb.SourceService_StreamServer) error {
 	if !s.stream.CompareAndSwap(nil, &stream) {
 		sdk.Logger(s.openContext).Warn().Msg("only one client connection is supported")
 		return errors.New("only one client connection is supported")
+	}
+	select {
+	case s.streamIsSetCh <- struct{}{}:
+		// successfully wrote to the channel
+	default:
+		// channel already contains a value
 	}
 	t := &tomb.Tomb{}
 	s.tomb.Store(&t)
@@ -105,14 +113,20 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 	}
 }
 
-func (s *Server) SendAck(position sdk.Position) error {
+func (s *Server) SendAck(ctx context.Context, position sdk.Position) error {
 	stream := s.stream.Load()
-	if stream == nil {
-		return fmt.Errorf("no stream is open")
+	for stream == nil {
+		select {
+		case <-s.streamIsSetCh:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		stream = s.stream.Load()
 	}
 	err := (*stream).Send(&pb.Ack{AckPosition: position})
 	if err != nil {
-		return fmt.Errorf("error while sending ack into stream: %w", err)
+		sdk.Logger(ctx).Err(err).Msg("error while sending ack into stream")
+		return s.SendAck(ctx, position)
 	}
 	return nil
 }
