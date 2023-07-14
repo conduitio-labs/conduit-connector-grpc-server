@@ -91,12 +91,17 @@ func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
 }
 
 func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
+	var err error
 	select {
 	case <-ctx.Done():
 		return sdk.Record{}, ctx.Err()
 	case record, ok := <-s.server.RecordCh:
 		if !ok {
 			return sdk.Record{}, fmt.Errorf("record channel is closed")
+		}
+		record.Position, err = s.DetachPositionIndex(record.Position)
+		if err != nil {
+			return sdk.Record{}, err
 		}
 		return record, nil
 	case err := <-s.errCh:
@@ -159,4 +164,12 @@ func (s *Source) runServer() error {
 		close(s.errCh)
 	}()
 	return nil
+}
+
+// DetachPositionIndex converts the position to its original form, before adding the 4 byte index by the gRPC client.
+func (s *Source) DetachPositionIndex(p sdk.Position) (sdk.Position, error) {
+	if len(p) < 4 {
+		return nil, fmt.Errorf("position must contain at least 4 bytes")
+	}
+	return p[4:], nil
 }

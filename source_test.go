@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"errors"
 	"net"
 	"os"
@@ -129,7 +130,8 @@ func TestRead_Success(t *testing.T) {
 	// prepare client
 	stream := createTestClient(t, true, dialer)
 	go func() {
-		for _, r := range records {
+		for i, r := range records {
+			r.Position = attachPositionIndex(r.Position, uint32(i))
 			record, err := toproto.Record(r)
 			is.NoErr(err)
 			err = stream.Send(record)
@@ -227,4 +229,12 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
 	return stream
+}
+
+func attachPositionIndex(p sdk.Position, index uint32) sdk.Position {
+	indexBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(indexBytes, index)
+
+	//nolint:makezero // intended append
+	return append(indexBytes, p...)
 }
