@@ -37,8 +37,9 @@ type Source struct {
 	server *source.Server
 
 	// for stopping the server
-	grpcSrv *grpc.Server
-	errCh   chan error
+	grpcSrv    *grpc.Server
+	errCh      chan error
+	indexQueue *Queue
 
 	// used only for injecting a listener in tests
 	listener net.Listener
@@ -87,11 +88,11 @@ func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
 	if err != nil {
 		return err
 	}
+	s.indexQueue = &Queue{}
 	return nil
 }
 
 func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
-	var err error
 	select {
 	case <-ctx.Done():
 		return sdk.Record{}, ctx.Err()
@@ -99,10 +100,11 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 		if !ok {
 			return sdk.Record{}, fmt.Errorf("record channel is closed")
 		}
-		record.Position, err = s.DetachPositionIndex(record.Position)
-		if err != nil {
-			return sdk.Record{}, err
-		}
+		pos := ToRecordPosition(record.Position)
+		// send the original position without the index to the destination
+		record.Position = pos.Original
+		// add the index to a queue, so we could attach it again when sending the ack
+		s.indexQueue.Enqueue(pos.Index)
 		return record, nil
 	case err := <-s.errCh:
 		return sdk.Record{}, fmt.Errorf("gRPC server error: %w", err)
@@ -111,6 +113,11 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 
 func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
+	index, err := s.indexQueue.Dequeue()
+	if err != nil {
+		return err
+	}
+	position = AttachPositionIndex(position, index)
 	return s.server.SendAck(position)
 }
 

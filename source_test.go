@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"errors"
 	"net"
 	"os"
@@ -131,7 +130,7 @@ func TestRead_Success(t *testing.T) {
 	stream := createTestClient(t, true, dialer)
 	go func() {
 		for i, r := range records {
-			r.Position = attachPositionIndex(r.Position, uint32(i))
+			r.Position = AttachPositionIndex(r.Position, uint32(i))
 			record, err := toproto.Record(r)
 			is.NoErr(err)
 			err = stream.Send(record)
@@ -147,12 +146,14 @@ func TestRead_Success(t *testing.T) {
 		err = src.Ack(ctx, rec.Position)
 		is.NoErr(err)
 	}
-	// wait for ack to be received
+	// wait for ack to be received on the client side
 	for i := range records {
 		// block until ack is received
 		ack, err := stream.Recv()
 		is.NoErr(err)
-		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
+		// client expects the first 4 bytes of the position to be the index.
+		// detach the index to compare positions
+		is.True(bytes.Equal(ack.AckPosition[4:], records[i].Position))
 	}
 }
 
@@ -229,12 +230,4 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 	stream, err := client.Stream(ctx)
 	is.NoErr(err)
 	return stream
-}
-
-func attachPositionIndex(p sdk.Position, index uint32) sdk.Position {
-	indexBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(indexBytes, index)
-
-	//nolint:makezero // intended append
-	return append(indexBytes, p...)
 }
