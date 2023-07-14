@@ -115,7 +115,7 @@ func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
 	index, err := s.indexQueue.Dequeue()
 	if err != nil {
-		return err
+		return fmt.Errorf("unexpected behaviour, an ack is not expected to be received, all records sent to conduit were already acked, %w", err)
 	}
 	position = AttachPositionIndex(position, index)
 	return s.server.SendAck(position)
@@ -171,12 +171,4 @@ func (s *Source) runServer() error {
 		close(s.errCh)
 	}()
 	return nil
-}
-
-// DetachPositionIndex converts the position to its original form, before adding the 4 byte index by the gRPC client.
-func (s *Source) DetachPositionIndex(p sdk.Position) (sdk.Position, error) {
-	if len(p) < 4 {
-		return nil, fmt.Errorf("position must contain at least 4 bytes")
-	}
-	return p[4:], nil
 }
