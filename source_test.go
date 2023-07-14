@@ -129,7 +129,8 @@ func TestRead_Success(t *testing.T) {
 	// prepare client
 	stream := createTestClient(t, true, dialer)
 	go func() {
-		for _, r := range records {
+		for i, r := range records {
+			r.Position = AttachPositionIndex(r.Position, uint32(i))
 			record, err := toproto.Record(r)
 			is.NoErr(err)
 			err = stream.Send(record)
@@ -145,12 +146,14 @@ func TestRead_Success(t *testing.T) {
 		err = src.Ack(ctx, rec.Position)
 		is.NoErr(err)
 	}
-	// wait for ack to be received
+	// wait for ack to be received on the client side
 	for i := range records {
 		// block until ack is received
 		ack, err := stream.Recv()
 		is.NoErr(err)
-		is.True(bytes.Equal(ack.AckPosition, records[i].Position))
+		// client expects the first 4 bytes of the position to be the index.
+		// detach the index to compare positions
+		is.True(bytes.Equal(ack.AckPosition[4:], records[i].Position))
 	}
 }
 
