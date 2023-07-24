@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/conduitio/conduit-connector-protocol v0.5.0
-	github.com/conduitio/conduit-connector-sdk v0.7.0
+	github.com/conduitio/conduit-connector-sdk v0.7.1
 	github.com/golang/mock v1.6.0
 	github.com/matryer/is v1.4.1
 	go.uber.org/multierr v1.11.0
