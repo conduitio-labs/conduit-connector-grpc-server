@@ -17,7 +17,7 @@ package grpcserver
 import (
 	"encoding/binary"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
 )
 
 type Position struct {
@@ -25,7 +25,7 @@ type Position struct {
 	Original []byte
 }
 
-func ToRecordPosition(p sdk.Position) Position {
+func ToRecordPosition(p opencdc.Position) Position {
 	uint32Value := binary.BigEndian.Uint32(p[:4])
 	return Position{
 		Index:    uint32Value,
@@ -33,7 +33,7 @@ func ToRecordPosition(p sdk.Position) Position {
 	}
 }
 
-func AttachPositionIndex(p sdk.Position, index uint32) sdk.Position {
+func AttachPositionIndex(p opencdc.Position, index uint32) opencdc.Position {
 	indexBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(indexBytes, index)
 

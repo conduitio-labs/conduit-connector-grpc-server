@@ -22,6 +22,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-grpc-server/fromproto"
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,7 +32,7 @@ import (
 type Server struct {
 	pb.UnimplementedSourceServiceServer
 
-	RecordCh chan sdk.Record
+	RecordCh chan opencdc.Record
 
 	teardown    chan struct{}
 	openContext context.Context
@@ -42,7 +43,7 @@ type Server struct {
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		RecordCh:    make(chan sdk.Record),
+		RecordCh:    make(chan opencdc.Record),
 		teardown:    make(chan struct{}),
 		openContext: ctx,
 	}
@@ -105,7 +106,7 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 	}
 }
 
-func (s *Server) SendAck(position sdk.Position) error {
+func (s *Server) SendAck(position opencdc.Position) error {
 	stream := s.stream.Load()
 	if stream == nil {
 		return fmt.Errorf("no stream is open")

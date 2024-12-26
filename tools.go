@@ -17,6 +17,6 @@
 package grpcserver
 
 import (
-	_ "github.com/conduitio/conduit-connector-sdk/cmd/paramgen"
+	_ "github.com/conduitio/conduit-commons/paramgen"
 	_ "github.com/golang/mock/mockgen"
 )

@@ -17,21 +17,21 @@ package toproto
 import (
 	"fmt"
 
-	opencdcv1 "github.com/conduitio/conduit-connector-protocol/proto/opencdc/v1"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
+	opencdcv1 "github.com/conduitio/conduit-commons/proto/opencdc/v1"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	var cTypes [1]struct{}
-	_ = cTypes[int(sdk.OperationCreate)-int(opencdcv1.Operation_OPERATION_CREATE)]
-	_ = cTypes[int(sdk.OperationUpdate)-int(opencdcv1.Operation_OPERATION_UPDATE)]
-	_ = cTypes[int(sdk.OperationDelete)-int(opencdcv1.Operation_OPERATION_DELETE)]
-	_ = cTypes[int(sdk.OperationSnapshot)-int(opencdcv1.Operation_OPERATION_SNAPSHOT)]
+	_ = cTypes[int(opencdc.OperationCreate)-int(opencdcv1.Operation_OPERATION_CREATE)]
+	_ = cTypes[int(opencdc.OperationUpdate)-int(opencdcv1.Operation_OPERATION_UPDATE)]
+	_ = cTypes[int(opencdc.OperationDelete)-int(opencdcv1.Operation_OPERATION_DELETE)]
+	_ = cTypes[int(opencdc.OperationSnapshot)-int(opencdcv1.Operation_OPERATION_SNAPSHOT)]
 }
 
-func Record(in sdk.Record) (*opencdcv1.Record, error) {
+func Record(in opencdc.Record) (*opencdcv1.Record, error) {
 	key, err := Data(in.Key)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func Record(in sdk.Record) (*opencdcv1.Record, error) {
 
 	out := &opencdcv1.Record{
 		Position:  in.Position,
-		Operation: opencdcv1.Operation(in.Operation),
+		Operation: opencdcv1.Operation(in.Operation), //nolint:gosec //ignore.
 		Metadata:  in.Metadata,
 		Key:       key,
 		Payload:   payload,
@@ -52,7 +52,7 @@ func Record(in sdk.Record) (*opencdcv1.Record, error) {
 	return out, nil
 }
 
-func Change(in sdk.Change) (*opencdcv1.Change, error) {
+func Change(in opencdc.Change) (*opencdcv1.Change, error) {
 	before, err := Data(in.Before)
 	if err != nil {
 		return nil, fmt.Errorf("error converting before: %w", err)
@@ -70,19 +70,19 @@ func Change(in sdk.Change) (*opencdcv1.Change, error) {
 	return &out, nil
 }
 
-func Data(in sdk.Data) (*opencdcv1.Data, error) {
+func Data(in opencdc.Data) (*opencdcv1.Data, error) {
 	if in == nil {
 		return nil, nil
 	}
 
 	switch v := in.(type) {
-	case sdk.RawData:
+	case opencdc.RawData:
 		return &opencdcv1.Data{
 			Data: &opencdcv1.Data_RawData{
 				RawData: v.Bytes(),
 			},
 		}, nil
-	case sdk.StructuredData:
+	case opencdc.StructuredData:
 		data, err := structpb.NewStruct(v)
 		if err != nil {
 			return nil, err

@@ -25,6 +25,8 @@ import (
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/source"
+	"github.com/conduitio/conduit-commons/config"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -62,16 +64,17 @@ func NewSource() sdk.Source {
 	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware()...)
 }
 
-func (s *Source) Parameters() map[string]sdk.Parameter {
+func (s *Source) Parameters() config.Parameters {
 	return s.config.Parameters()
 }
 
-func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
+func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Info().Msg("Configuring Source...")
-	err := sdk.Util.ParseConfig(cfg, &s.config)
+	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, NewSource().Parameters())
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+
 	if !s.config.MTLS.Disabled {
 		s.serverCert, s.caCertPool, err = s.config.MTLS.ParseMTLSFiles()
 		if err != nil {
@@ -81,7 +84,7 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
-func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
+func (s *Source) Open(ctx context.Context, _ opencdc.Position) error {
 	sdk.Logger(ctx).Info().Msg("Opening Source...")
 	s.server = source.NewServer(ctx)
 	err := s.runServer()
@@ -92,13 +95,13 @@ func (s *Source) Open(ctx context.Context, _ sdk.Position) error {
 	return nil
 }
 
-func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
+func (s *Source) Read(ctx context.Context) (opencdc.Record, error) {
 	select {
 	case <-ctx.Done():
-		return sdk.Record{}, ctx.Err()
+		return opencdc.Record{}, ctx.Err()
 	case record, ok := <-s.server.RecordCh:
 		if !ok {
-			return sdk.Record{}, fmt.Errorf("record channel is closed")
+			return opencdc.Record{}, fmt.Errorf("record channel is closed")
 		}
 		pos := ToRecordPosition(record.Position)
 		// send the original position without the index to the destination
@@ -107,11 +110,11 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 		s.indexQueue.Enqueue(pos.Index)
 		return record, nil
 	case err := <-s.errCh:
-		return sdk.Record{}, fmt.Errorf("gRPC server error: %w", err)
+		return opencdc.Record{}, fmt.Errorf("gRPC server error: %w", err)
 	}
 }
 
-func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
+func (s *Source) Ack(ctx context.Context, position opencdc.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
 	index, err := s.indexQueue.Dequeue()
 	if err != nil {

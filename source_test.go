@@ -27,6 +27,7 @@ import (
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 	"google.golang.org/grpc"
@@ -79,31 +80,31 @@ func TestRead_Success(t *testing.T) {
 		return lis.DialContext(ctx)
 	}
 
-	records := []sdk.Record{
+	records := []opencdc.Record{
 		{
-			Position:  sdk.Position("foo"),
-			Operation: sdk.OperationCreate,
-			Key:       sdk.StructuredData{"id1": "6"},
-			Payload: sdk.Change{
-				After: sdk.StructuredData{
+			Position:  opencdc.Position("foo"),
+			Operation: opencdc.OperationCreate,
+			Key:       opencdc.StructuredData{"id1": "6"},
+			Payload: opencdc.Change{
+				After: opencdc.StructuredData{
 					"foo": "bar",
 				},
 			},
 		},
 		{
-			Position:  sdk.Position("foobar"),
-			Operation: sdk.OperationSnapshot,
-			Key:       sdk.RawData("bar"),
-			Payload: sdk.Change{
-				After: sdk.RawData("baz"),
+			Position:  opencdc.Position("foobar"),
+			Operation: opencdc.OperationSnapshot,
+			Key:       opencdc.RawData("bar"),
+			Payload: opencdc.Change{
+				After: opencdc.RawData("baz"),
 			},
 		},
 		{
-			Position:  sdk.Position("bar"),
-			Operation: sdk.OperationDelete,
-			Key:       sdk.RawData("foobar"),
-			Payload: sdk.Change{
-				After: sdk.StructuredData{
+			Position:  opencdc.Position("bar"),
+			Operation: opencdc.OperationDelete,
+			Key:       opencdc.RawData("foobar"),
+			Payload: opencdc.Change{
+				After: opencdc.StructuredData{
 					"bar": "baz",
 				},
 			},
@@ -130,7 +131,7 @@ func TestRead_Success(t *testing.T) {
 	stream := createTestClient(t, true, dialer)
 	go func() {
 		for i, r := range records {
-			r.Position = AttachPositionIndex(r.Position, uint32(i))
+			r.Position = AttachPositionIndex(r.Position, uint32(i)) //nolint:gosec //ignore.
 			record, err := toproto.Record(r)
 			is.NoErr(err)
 			err = stream.Send(record)
