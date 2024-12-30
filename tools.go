@@ -14,7 +14,7 @@
 
 //go:build tools
 
-package grpcserver
+package main
 
 import (
 	_ "github.com/conduitio/conduit-commons/paramgen"
