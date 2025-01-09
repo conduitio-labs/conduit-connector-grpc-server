@@ -7,4 +7,4 @@ breaking:
   use:
     - FILE
 deps:
-  - buf.build/conduitio/conduit-connector-protocol
+  - buf.build/conduitio/conduit-commons

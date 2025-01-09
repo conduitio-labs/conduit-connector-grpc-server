@@ -217,11 +217,7 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 	}
 
 	ctx := context.Background()
-	conn, err := grpc.DialContext(
-		ctx,
-		"localhost",
-		dialOptions...,
-	)
+	conn, err := grpc.NewClient("localhost", dialOptions...)
 	is.NoErr(err)
 	t.Cleanup(func() {
 		err = conn.Close()
