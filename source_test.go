@@ -84,6 +84,7 @@ func TestRead_Success(t *testing.T) {
 		{
 			Position:  opencdc.Position("foo"),
 			Operation: opencdc.OperationCreate,
+			Metadata:  opencdc.Metadata{},
 			Key:       opencdc.StructuredData{"id1": "6"},
 			Payload: opencdc.Change{
 				After: opencdc.StructuredData{
@@ -102,6 +103,7 @@ func TestRead_Success(t *testing.T) {
 		{
 			Position:  opencdc.Position("bar"),
 			Operation: opencdc.OperationDelete,
+			Metadata:  opencdc.Metadata{},
 			Key:       opencdc.RawData("foobar"),
 			Payload: opencdc.Change{
 				After: opencdc.StructuredData{
