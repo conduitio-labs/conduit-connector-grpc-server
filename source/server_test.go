@@ -22,8 +22,8 @@ import (
 	"time"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
-	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
 	"github.com/conduitio/conduit-commons/opencdc"
+	opencdcv1 "github.com/conduitio/conduit-commons/proto/opencdc/v1"
 	"github.com/matryer/is"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -77,7 +77,8 @@ func TestServer_Success(t *testing.T) {
 	stream := createTestClient(t, dialer)
 	go func() {
 		for _, r := range records {
-			record, err := toproto.Record(r)
+			record := &opencdcv1.Record{}
+			err := r.ToProto(record)
 			is.NoErr(err)
 			err = stream.Send(record)
 			is.NoErr(err)
@@ -118,7 +119,8 @@ func TestServer_StopSignal(t *testing.T) {
 	stream := createTestClient(t, dialer)
 
 	want := opencdc.Record{Position: opencdc.Position("foo")}
-	record, err := toproto.Record(want)
+	record := &opencdcv1.Record{}
+	err = want.ToProto(record)
 	is.NoErr(err)
 	err = stream.Send(record)
 	is.NoErr(err)
@@ -178,7 +180,8 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	// second client should be able to connect to server
 	stream2 := createTestClient(t, dialer)
 
-	record, err := toproto.Record(want)
+	record := &opencdcv1.Record{}
+	err = want.ToProto(record)
 	is.NoErr(err)
 	// second stream should work
 	err = stream2.Send(record)

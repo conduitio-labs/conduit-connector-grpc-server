@@ -26,8 +26,8 @@ import (
 	"time"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
-	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
 	"github.com/conduitio/conduit-commons/opencdc"
+	opencdcv1 "github.com/conduitio/conduit-commons/proto/opencdc/v1"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 	"google.golang.org/grpc"
@@ -134,7 +134,8 @@ func TestRead_Success(t *testing.T) {
 	go func() {
 		for i, r := range records {
 			r.Position = AttachPositionIndex(r.Position, uint32(i)) //nolint:gosec //ignore.
-			record, err := toproto.Record(r)
+			record := &opencdcv1.Record{}
+			err = r.ToProto(record)
 			is.NoErr(err)
 			err = stream.Send(record)
 			is.NoErr(err)

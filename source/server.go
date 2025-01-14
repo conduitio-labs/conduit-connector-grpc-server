@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/conduitio-labs/conduit-connector-grpc-server/fromproto"
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -92,13 +91,15 @@ func (s *Server) recvRecords(stream pb.SourceService_StreamServer) error {
 		if err != nil {
 			return fmt.Errorf("error receiving record from client: %w", err)
 		}
-		sdkRecord, err := fromproto.Record(record)
+
+		sdkRecord := &opencdc.Record{}
+		err = sdkRecord.FromProto(record)
 		if err != nil {
 			return err
 		}
 		// make sure the record channel is not closed
 		select {
-		case s.RecordCh <- sdkRecord:
+		case s.RecordCh <- *sdkRecord:
 			// worked fine!
 		case <-s.openContext.Done():
 			return nil
