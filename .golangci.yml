@@ -1,16 +1,25 @@
+run:
+  timeout: 5m
+
 linters-settings:
-  gofmt:
-    simplify: false
-  govet:
-    check-shadowing: false
   nolintlint:
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
     require-specific: true # require nolint directives to mention the specific linter being suppressed
-  gocyclo:
-    min-complexity: 20
   goconst:
     ignore-tests: true
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - errors.Join(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+      - (context.Context).Err()
   goheader:
     template-path: '.golangci.goheader.template'
     values:
@@ -29,20 +38,20 @@ linters:
     - errcheck
     - errname
     # - errorlint
-    # - exhaustive
+    - exhaustive
     # - exhaustivestruct
-    - exportloopref
+    - copyloopvar
     # - forbidigo
-    # - forcetypeassert
+    - forcetypeassert
     # - funlen
-    # - gochecknoinits
+    - gochecknoinits
     - goconst
     - gocritic
     - gocyclo
     # - cyclop # not interested in package complexities at the moment
-    # - godot
+    - godot
     - gofmt
-    # - gofumpt
+    - gofumpt
     - goheader
     - goimports
     # - revive
@@ -55,11 +64,11 @@ linters:
     - govet
     # - ifshort
     - ineffassign
-    # - importas
+    - importas
     # - lll
-    # - misspell
+    - misspell
     - makezero
-    # - nakedret
+    - nakedret
     # - nilerr
     # - nilnil
     # - nlreturn
@@ -67,19 +76,19 @@ linters:
     - nolintlint
     # - paralleltest
     - predeclared
-    # - rowserrcheck
-    - staticcheck
+    - rowserrcheck
+    # - staticcheck
     - stylecheck
-    # - sqlclosecheck
+    - sqlclosecheck
     # - tagliatelle
-    # - tenv
+    - tenv
     # - thelper
     # - tparallel
     - typecheck
     - unconvert
     # - unparam
     - unused
-    # - wastedassign
+    - wastedassign
     - whitespace
     # - wrapcheck
     # - wsl

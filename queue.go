@@ -19,13 +19,13 @@ import (
 	"sync"
 )
 
-// Queue represents a simple FIFO queue
+// Queue represents a simple FIFO queue.
 type Queue struct {
 	items []uint32
 	m     sync.Mutex
 }
 
-// Enqueue adds an item to the end of the queue
+// Enqueue adds an item to the end of the queue.
 func (q *Queue) Enqueue(item uint32) {
 	q.m.Lock()
 	defer q.m.Unlock()
@@ -33,7 +33,7 @@ func (q *Queue) Enqueue(item uint32) {
 	q.items = append(q.items, item)
 }
 
-// Dequeue removes and returns the first item from the queue
+// Dequeue removes and returns the first item from the queue.
 func (q *Queue) Dequeue() (uint32, error) {
 	q.m.Lock()
 	defer q.m.Unlock()

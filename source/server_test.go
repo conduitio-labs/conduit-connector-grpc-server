@@ -22,8 +22,8 @@ import (
 	"time"
 
 	pb "github.com/conduitio-labs/conduit-connector-grpc-server/proto/v1"
-	"github.com/conduitio-labs/conduit-connector-grpc-server/toproto"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
+	opencdcv1 "github.com/conduitio/conduit-commons/proto/opencdc/v1"
 	"github.com/matryer/is"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -42,31 +42,31 @@ func TestServer_Success(t *testing.T) {
 	is.NoErr(err)
 	defer server.Close()
 
-	records := []sdk.Record{
+	records := []opencdc.Record{
 		{
-			Position:  sdk.Position("foo"),
-			Operation: sdk.OperationCreate,
-			Key:       sdk.StructuredData{"id1": "6"},
-			Payload: sdk.Change{
-				After: sdk.StructuredData{
+			Position:  opencdc.Position("foo"),
+			Operation: opencdc.OperationCreate,
+			Key:       opencdc.StructuredData{"id1": "6"},
+			Payload: opencdc.Change{
+				After: opencdc.StructuredData{
 					"foo": "bar",
 				},
 			},
 		},
 		{
-			Position:  sdk.Position("foobar"),
-			Operation: sdk.OperationSnapshot,
-			Key:       sdk.RawData("bar"),
-			Payload: sdk.Change{
-				After: sdk.RawData("baz"),
+			Position:  opencdc.Position("foobar"),
+			Operation: opencdc.OperationSnapshot,
+			Key:       opencdc.RawData("bar"),
+			Payload: opencdc.Change{
+				After: opencdc.RawData("baz"),
 			},
 		},
 		{
-			Position:  sdk.Position("bar"),
-			Operation: sdk.OperationDelete,
-			Key:       sdk.RawData("foobar"),
-			Payload: sdk.Change{
-				After: sdk.StructuredData{
+			Position:  opencdc.Position("bar"),
+			Operation: opencdc.OperationDelete,
+			Key:       opencdc.RawData("foobar"),
+			Payload: opencdc.Change{
+				After: opencdc.StructuredData{
 					"bar": "baz",
 				},
 			},
@@ -77,7 +77,8 @@ func TestServer_Success(t *testing.T) {
 	stream := createTestClient(t, dialer)
 	go func() {
 		for _, r := range records {
-			record, err := toproto.Record(r)
+			record := &opencdcv1.Record{}
+			err := r.ToProto(record)
 			is.NoErr(err)
 			err = stream.Send(record)
 			is.NoErr(err)
@@ -117,8 +118,9 @@ func TestServer_StopSignal(t *testing.T) {
 	// prepare client
 	stream := createTestClient(t, dialer)
 
-	want := sdk.Record{Position: sdk.Position("foo")}
-	record, err := toproto.Record(want)
+	want := opencdc.Record{Position: opencdc.Position("foo")}
+	record := &opencdcv1.Record{}
+	err = want.ToProto(record)
 	is.NoErr(err)
 	err = stream.Send(record)
 	is.NoErr(err)
@@ -158,12 +160,12 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	is.NoErr(err)
 	defer server.Close()
 
-	want := sdk.Record{
-		Position:  sdk.Position("foo"),
-		Operation: sdk.OperationCreate,
-		Key:       sdk.StructuredData{"id1": "6"},
-		Payload: sdk.Change{
-			After: sdk.StructuredData{
+	want := opencdc.Record{
+		Position:  opencdc.Position("foo"),
+		Operation: opencdc.OperationCreate,
+		Key:       opencdc.StructuredData{"id1": "6"},
+		Payload: opencdc.Change{
+			After: opencdc.StructuredData{
 				"foo": "bar",
 			},
 		},
@@ -178,7 +180,8 @@ func TestServer_ClientStreamClosed(t *testing.T) {
 	// second client should be able to connect to server
 	stream2 := createTestClient(t, dialer)
 
-	record, err := toproto.Record(want)
+	record := &opencdcv1.Record{}
+	err = want.ToProto(record)
 	is.NoErr(err)
 	// second stream should work
 	err = stream2.Send(record)

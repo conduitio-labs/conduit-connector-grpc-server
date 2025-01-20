@@ -39,3 +39,5 @@ To generate your own secure mTLS certificates, check
 
 ## Planned work
 - Add a destination for gRPC server. 
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=fdabe747-b944-4ab3-a349-b8d3e2f2e19c)
