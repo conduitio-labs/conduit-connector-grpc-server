@@ -198,7 +198,7 @@ func createTestClient(t *testing.T, enableMTLS bool, dialer func(ctx context.Con
 	dialOptions := []grpc.DialOption{
 		grpc.WithContextDialer(dialer),
 		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoff.DefaultConfig}),
-		grpc.WithBlock(),
+		grpc.WithBlock(), //nolint:staticcheck // Need to update the code
 	}
 	if enableMTLS {
 		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)

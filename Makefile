@@ -1,31 +1,31 @@
-.PHONY: build test test-integration generate install-paramgen proto-generate download install-tools generate-certs
-
 VERSION=$(shell git describe --tags --dirty --always)
 
+.PHONY: build
 build:
 	go build -ldflags "-X 'github.com/conduitio-labs/conduit-connector-grpc-server.version=${VERSION}'" -o conduit-connector-grpc-server cmd/connector/main.go
 
+.PHONY: test
 test:
 	go test $(GOTEST_FLAGS) -race ./...
 
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: generate
 generate:
 	go generate ./...
 
-install-paramgen:
-	go install github.com/conduitio/conduit-connector-sdk/cmd/paramgen@latest
-
+.PHONY: proto-generate
 proto-generate:
 	cd proto && buf generate
 
-download:
-	@echo Download go.mod dependencies
-	@go mod download
-
+.PHONY: install-tools
 install-tools:
-	@echo Installing tools from tools.go
-	@go list -e -f '{{ join .Imports "\n" }}' tools.go | xargs -I % go list -f "%@{{.Module.Version}}" % | xargs -tI % go install %
+	@echo Installing tools from tools/go.mod
+	@go list -modfile=tools/go.mod tool | xargs -I % go list -modfile=tools/go.mod -f "%@{{.Module.Version}}" % | xargs -tI % go install %
 	@go mod tidy
 
-
+.PHONY: generate-certs
 generate-certs:
 	sh test/generate-certs.sh

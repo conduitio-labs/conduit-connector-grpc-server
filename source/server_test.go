@@ -214,11 +214,11 @@ func runServer(t *testing.T, lis *bufconn.Listener, ctx context.Context) (*Serve
 func createTestClient(t *testing.T, dialer func(ctx context.Context, _ string) (net.Conn, error)) pb.SourceService_StreamClient {
 	is := is.New(t)
 	ctx := context.Background()
-	conn, err := grpc.DialContext(
+	conn, err := grpc.DialContext( //nolint:staticcheck // Need to update the code
 		ctx,
 		"bufnet",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		grpc.WithBlock(), //nolint:staticcheck // Need to update the code
 		grpc.WithContextDialer(dialer),
 	)
 	is.NoErr(err)
