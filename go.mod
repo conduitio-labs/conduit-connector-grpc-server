@@ -1,13 +1,10 @@
 module github.com/conduitio-labs/conduit-connector-grpc-server
 
-go 1.23.2
-
-toolchain go1.23.3
+go 1.24.2
 
 require (
 	github.com/conduitio/conduit-commons v0.5.0
 	github.com/conduitio/conduit-connector-sdk v0.12.0
-	github.com/golang/mock v1.6.0
 	github.com/matryer/is v1.4.1
 	go.uber.org/multierr v1.11.0
 	google.golang.org/grpc v1.68.0
